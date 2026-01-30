@@ -46,7 +46,8 @@ RUN apt-get -qq update && \
     apt-get -qq -y upgrade && \
     apt-get -qq -y install --no-install-recommends \
       build-essential apt-utils fakeroot devscripts equivs \
-      ca-certificates curl gpg
+      ca-certificates curl gpg \
+      libpmix-dev
 
 # Add CUDA repository for NVML development headers (nvml.h)
 # Ref: https://developer.nvidia.com/cuda-downloads
@@ -120,6 +121,7 @@ RUN apt-get -qq update && \
       gawk socat \
       openssh-server \
       authselect sssd sssd-ad sssd-ldap libpam-sss libnss-sss \
+      libpmix2 \
       ./slurm-smd-client_[0-9]*.deb \
       ./slurm-smd-client-dbgsym_[0-9]*.ddeb \
       ./slurm-smd-dev_[0-9]*.deb \
@@ -154,6 +156,38 @@ RUN apt-get -qq update && \
       nvidia-container-toolkit && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
+
+# Install InfiniBand/RDMA libraries for multi-node GPU communication
+# Note: NCCL is provided by HPC-X to avoid version conflicts
+RUN apt-get -qq update && \
+    apt-get -qq -y install --no-install-recommends \
+      rdma-core libibverbs-dev librdmacm-dev \
+      ibverbs-providers infiniband-diags \
+      libfabric1 libfabric-dev \
+      numactl && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install UCX for high-performance networking (NVLink/NVSwitch/InfiniBand)
+# UCX provides the transport layer for NCCL to use optimal paths
+RUN apt-get -qq update && \
+    apt-get -qq -y install --no-install-recommends \
+      libucx0 libucx-dev ucx-utils && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Install NCCL from NVIDIA CUDA repository
+RUN apt-get -qq update && \
+    apt-get -qq -y install --no-install-recommends \
+      libnccl2 libnccl-dev && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Set UCX environment for optimal NCCL performance
+ENV UCX_TLS=rc,cuda_copy,cuda_ipc,gdr_copy
+ENV UCX_NET_DEVICES=mlx5_0:1
+ENV NCCL_UCX_RNDV_SCHEME=get_zcopy
+ENV NCCL_UCX_RNDV_THRESH=0
 
 # Add gres.conf with NVIDIA autodetection
 RUN mkdir -p /etc/slurm && echo "AutoDetect=nvidia" > /etc/slurm/gres.conf
