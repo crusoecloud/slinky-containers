@@ -1,0 +1,171 @@
+# SPDX-FileCopyrightText: Copyright (C) SchedMD LLC.
+# SPDX-License-Identifier: Apache-2.0
+#
+# Standalone slurmd image with NVIDIA Container Toolkit for AutoDetect=nvml support.
+# Optimized for Slinky (Slurm on Kubernetes) deployments.
+# Compatible with legacy Docker builder (no BuildKit required).
+
+################################################################################
+
+ARG SLURM_VERSION=25.11-latest
+ARG SLURM_DIR=slurm
+ARG PARENT_IMAGE=ubuntu:24.04
+
+################################################################################
+FROM alpine:latest AS slurm-src
+
+ARG SLURM_VERSION
+ARG SLURM_DIR
+ARG SLURM_TAR="slurm-${SLURM_VERSION}"
+
+WORKDIR /workspace/
+
+RUN apk add -q --no-cache tar
+
+ADD https://download.schedmd.com/slurm/${SLURM_TAR}.tar.bz2 ${SLURM_TAR}.tar.bz2
+
+RUN mkdir -p ${SLURM_DIR} && \
+    tar --strip-components=1 -jxvf ${SLURM_TAR}.tar.bz2 -C ${SLURM_DIR} && \
+    rm ${SLURM_TAR}.tar.bz2
+
+################################################################################
+FROM ${PARENT_IMAGE} AS build
+
+SHELL ["bash", "-c"]
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+ARG SLURM_VERSION
+ENV SLURM_VERSION=${SLURM_VERSION}
+ARG SLURM_DIR
+
+USER root
+WORKDIR /tmp/
+
+RUN apt-get -qq update && \
+    apt-get -qq -y upgrade && \
+    apt-get -qq -y install --no-install-recommends \
+      build-essential apt-utils fakeroot devscripts equivs \
+      ca-certificates curl gpg
+
+# Add CUDA repository for NVML development headers (nvml.h)
+# Ref: https://developer.nvidia.com/cuda-downloads
+RUN curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb -o cuda-keyring.deb && \
+    dpkg -i cuda-keyring.deb && \
+    rm cuda-keyring.deb && \
+    apt-get -qq update && \
+    apt-get -qq -y install --no-install-recommends cuda-nvml-dev-12-6 && \
+    ln -s /usr/local/cuda-12.6 /usr/local/cuda
+
+COPY --from=slurm-src /workspace/${SLURM_DIR} ${SLURM_DIR}
+
+# Ref: https://slurm.schedmd.com/quickstart_admin.html#debuild
+RUN mk-build-deps -ir --tool='apt-get -y -o Debug::pkgProblemResolver=yes --no-install-recommends' ${SLURM_DIR}/debian/control >/dev/null && \
+    cd ${SLURM_DIR} && debuild -b -uc -us >/dev/null
+
+################################################################################
+FROM ${PARENT_IMAGE} AS base
+
+SHELL ["bash", "-c"]
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+ARG SLURM_VERSION
+ENV SLURM_VERSION=${SLURM_VERSION}
+
+USER root
+WORKDIR /tmp/
+
+ARG SLURM_USER=slurm
+ARG SLURM_USER_UID=401
+ARG SLURM_USER_GID=401
+
+RUN groupadd --system --gid=${SLURM_USER_GID} ${SLURM_USER} && \
+    useradd --system --no-log-init --uid=${SLURM_USER_UID} --gid=${SLURM_USER_GID} --shell=/usr/sbin/nologin ${SLURM_USER}
+
+RUN for user in $(ls /home/); do userdel --remove $user 2>/dev/null || true; done
+
+COPY --from=build /tmp/*.deb /tmp/*.ddeb /tmp/
+
+RUN apt-get -qq update && \
+    apt-get -qq -y upgrade && \
+    apt-get -qq -y install --no-install-recommends \
+      supervisor tini \
+      procps iputils-ping ncurses-bin
+
+################################################################################
+FROM base AS base-extra
+
+SHELL ["bash", "-c"]
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get -qq update && \
+    apt-get -qq -y install --no-install-recommends \
+      openmpi-bin
+
+################################################################################
+FROM base-extra AS slurmd-nvml
+
+SHELL ["bash", "-c"]
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+USER root
+WORKDIR /tmp/
+
+# Ref: https://slurm.schedmd.com/quickstart_admin.html#pkg_install
+RUN apt-get -qq update && \
+    apt-get -qq -y install --no-install-recommends --fix-broken \
+      gawk socat \
+      openssh-server \
+      authselect sssd sssd-ad sssd-ldap libpam-sss libnss-sss \
+      ./slurm-smd-client_[0-9]*.deb \
+      ./slurm-smd-client-dbgsym_[0-9]*.ddeb \
+      ./slurm-smd-dev_[0-9]*.deb \
+      ./slurm-smd-doc_[0-9]*.deb \
+      ./slurm-smd-libnss-slurm_[0-9]*.deb \
+      ./slurm-smd-libnss-slurm-dbgsym_[0-9]*.ddeb \
+      ./slurm-smd-libpam-slurm-adopt_[0-9]*.deb \
+      ./slurm-smd-libpmi2-0_[0-9]*.deb \
+      ./slurm-smd-slurmd_[0-9]*.deb \
+      ./slurm-smd-slurmd-dbgsym_[0-9]*.ddeb \
+      ./slurm-smd_[0-9]*.deb \
+      ./slurm-smd-dbgsym_[0-9]*.ddeb && \
+    rm *.deb && rm *.ddeb && \
+    mkdir -p /var/spool/slurmd/ && \
+    sed -i -E "s/^passwd:[[:space:]]+/&slurm /g" /etc/nsswitch.conf && \
+    sed -i -E "s/^group:[[:space:]]+/&slurm /g" /etc/nsswitch.conf && \
+    mkdir -p /etc/authselect && \
+    authselect select sssd with-mkhomedir --force && \
+    rm -f /etc/ssh/ssh_host_*
+
+# Add NVIDIA Container Toolkit for AutoDetect=nvml
+# Ref: https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html#with-apt-ubuntu-debian
+RUN apt-get -qq update && \
+    apt-get -qq -y install --no-install-recommends \
+      ca-certificates curl gpg && \
+    curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg && \
+    curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+      sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+      tee /etc/apt/sources.list.d/nvidia-container-toolkit.list && \
+    apt-get -qq update && \
+    apt-get -qq -y install --no-install-recommends \
+      nvidia-container-toolkit && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Add gres.conf with NVIDIA autodetection
+RUN mkdir -p /etc/slurm && echo "AutoDetect=nvidia" > /etc/slurm/gres.conf
+
+COPY files/etc/supervisor/supervisord.conf /etc/supervisor/
+COPY files/etc/supervisor/conf.d/fakesystemd.conf \
+     files/etc/supervisor/conf.d/slurmd.conf \
+     files/etc/supervisor/conf.d/sshd.conf \
+     files/etc/supervisor/conf.d/sssd.conf \
+     /etc/supervisor/conf.d/
+COPY files/usr/local/bin/fakesystemd.sh /usr/local/bin/
+COPY files/usr/local/bin/slurmd-entrypoint.sh /usr/local/bin/entrypoint.sh
+
+EXPOSE 6818/tcp 22/tcp
+ENTRYPOINT ["entrypoint.sh"]

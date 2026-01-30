@@ -230,8 +230,20 @@ target "login" {
 
 group "extras" {
   targets = [
+    "slurmd_nvml",
     "slurmd_pyxis",
     "login_pyxis",
+  ]
+}
+
+target "slurmd_nvml" {
+  inherits = ["_slurmd"]
+  context = context
+  dockerfile = "Dockerfile.slurmd-nvml"
+  target = "slurmd-nvml"
+  tags = [
+    format_tag(REGISTRY, "slurmd-nvml", slurm_version(slurm_version), linux_flavor, SUFFIX),
+    format_tag(REGISTRY, "slurmd-nvml", slurm_version, linux_flavor, SUFFIX),
   ]
 }
 
@@ -330,9 +342,14 @@ target "login_multiarch" {
 
 group "extras-multiarch" {
   targets = [
+    "slurmd_nvml_multiarch",
     "slurmd_pyxis_multiarch",
     "login_pyxis_multiarch",
   ]
+}
+
+target "slurmd_nvml_multiarch" {
+  inherits = ["slurmd_nvml", "_multiarch"]
 }
 
 target "slurmd_pyxis_multiarch" {
@@ -430,9 +447,14 @@ target "login_dev" {
 
 group "extras-dev" {
   targets = [
+    "slurmd_nvml_dev",
     "slurmd_pyxis_dev",
     "login_pyxis_dev",
   ]
+}
+
+target "slurmd_nvml_dev" {
+  inherits = ["slurmd_nvml", "_dev"]
 }
 
 target "slurmd_pyxis_dev" {
