@@ -246,6 +246,13 @@ WORKDIR /tmp/
 # Ref: https://slurm.schedmd.com/quickstart_admin.html#pkg_install
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   --mount=type=cache,target=/var/lib/apt,sharing=locked <<EOR
+# Install Packages
+set -xeuo pipefail
+apt-get -qq update
+apt-get -qq -y install --no-install-recommends \
+  socat \
+  openssh-server \
+  authselect sssd sssd-ad sssd-ldap libpam-sss libnss-sss
 # Configure
 mkdir -p /etc/authselect
 authselect select sssd with-mkhomedir --force
