@@ -143,6 +143,7 @@ target "_login" {
 }
 
 target "hpcx_base" {
+  context = context
   dockerfile = "Dockerfile.hpcx"
   tags = ["hpcx-base:cuda12.8.1-ubuntu24.04"]
   labels = {
