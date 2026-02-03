@@ -142,6 +142,16 @@ target "_login" {
   }
 }
 
+target "hpcx_base" {
+  dockerfile = "Dockerfile.hpcx"
+  tags = ["hpcx-base:cuda12.8.1-ubuntu24.04"]
+  labels = {
+    "org.opencontainers.image.title" = "HPCX Base Image"
+    "org.opencontainers.image.description" = "Custom Ubuntu 24.04 base with CUDA 12.8.1 and HPC-X"
+    "org.opencontainers.image.vendor" = "Crusoe"
+  }
+}
+
 ################################################################################
 
 group "default" {
