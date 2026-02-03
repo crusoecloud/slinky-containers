@@ -60,7 +60,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 # Install Enroot
 set -xeuo pipefail
 apt-get -qq update
-apt-get -qq -y upgrade
 apt-get -qq -y install --no-install-recommends --fix-broken \
   ca-certificates gpg \
   bash-completion \
@@ -114,7 +113,6 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 # Install Enroot
 set -xeuo pipefail
 apt-get -qq update
-apt-get -qq -y upgrade
 apt-get -qq -y install --no-install-recommends --fix-broken \
   ca-certificates gpg \
   bash-completion \
