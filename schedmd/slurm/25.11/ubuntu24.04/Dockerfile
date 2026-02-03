@@ -254,7 +254,8 @@ apt-get -qq update
 apt-get -qq -y install --no-install-recommends \
   socat \
   openssh-server \
-  authselect sssd sssd-ad sssd-ldap libpam-sss libnss-sss
+  authselect sssd sssd-ad sssd-ldap libpam-sss libnss-sss \
+  sudo
 # Configure
 mkdir -p /etc/authselect
 authselect select sssd with-mkhomedir --force
