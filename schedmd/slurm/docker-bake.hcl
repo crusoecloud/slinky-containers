@@ -42,6 +42,7 @@ function "format_tag" {
 target "_slurm" {
   args = {
     SLURM_VERSION = slurm_version
+    REGISTRY = REGISTRY
   }
   labels = {
     # Ref: https://github.com/opencontainers/image-spec/blob/v1.0/annotations.md
