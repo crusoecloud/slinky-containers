@@ -45,14 +45,14 @@ WORKDIR /tmp/
 
 COPY --from=slurm-src /workspace/${SLURM_DIR} ${SLURM_DIR}
 
+# Ref: https://slurm.schedmd.com/quickstart_admin.html#manual_build
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   --mount=type=cache,target=/var/lib/apt,sharing=locked <<EOR
+# Install Dependencies
 set -xeuo pipefail
-
 apt-get update && apt-get install -y libjson-c-dev libhttp-parser-dev libjwt-dev libdbus-1-dev libbpf-dev
-
+# Build Slurm
 cd /tmp/${SLURM_DIR}
-
 ./configure \
     --with-pmix="/usr/lib/$(gcc -print-multiarch)/pmix2" \
     --with-jwt=/usr/ \
@@ -61,9 +61,8 @@ cd /tmp/${SLURM_DIR}
     --sysconfdir=/etc/slurm \
     --with-nvml \
     --without-munge
-
 make -j install
-
+# Cleanup
 rm -rf /etc/slurm
 cd /
 rm -rf /tmp/slurm-src
@@ -111,8 +110,6 @@ ARG DEBIAN_FRONTEND=noninteractive
 USER root
 WORKDIR /tmp/
 
-# Ref: https://slurm.schedmd.com/quickstart_admin.html#pkg_install
-
 COPY files/etc/supervisor/supervisord.conf /etc/supervisor/
 COPY \
   files/etc/supervisor/conf.d/slurmctld.conf \
@@ -132,7 +129,6 @@ ARG DEBIAN_FRONTEND=noninteractive
 USER root
 WORKDIR /tmp/
 
-# Ref: https://slurm.schedmd.com/quickstart_admin.html#pkg_install
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   --mount=type=cache,target=/var/lib/apt,sharing=locked <<EOR
 # Install Packages
@@ -222,9 +218,9 @@ apt-get -qq -y install --no-install-recommends kubectl
 rm *.txt
 EOR
 
-# Ref: https://slurm.schedmd.com/quickstart_admin.html#pkg_install
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   --mount=type=cache,target=/var/lib/apt,sharing=locked <<EOR
+set -xeuo pipefail
 # Prepare Directories
 mkdir -p /run/slurm/
 chown ${SLURM_USER}:${SLURM_USER} /run/slurm
@@ -250,7 +246,6 @@ ARG DEBIAN_FRONTEND=noninteractive
 USER root
 WORKDIR /tmp/
 
-# Ref: https://slurm.schedmd.com/quickstart_admin.html#pkg_install
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   --mount=type=cache,target=/var/lib/apt,sharing=locked <<EOR
 # Install Packages
