@@ -6,7 +6,8 @@
 
 ARG SLURM_VERSION=25.11-latest
 ARG SLURM_DIR=slurm
-ARG PARENT_IMAGE=hpcx-base:cuda12.8.1-ubuntu24.04
+ARG REGISTRY
+ARG PARENT_IMAGE=${REGISTRY}/hpcx-base:cuda12.8.1-ubuntu24.04
 
 ################################################################################
 FROM alpine:latest AS slurm-src
