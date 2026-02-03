@@ -145,7 +145,9 @@ target "_login" {
 target "hpcx_base" {
   context = context
   dockerfile = "Dockerfile.hpcx"
-  tags = ["hpcx-base:cuda12.8.1-ubuntu24.04"]
+  tags = [
+    format_tag(REGISTRY, "hpcx-base", "cuda12.8.1", linux_flavor, SUFFIX),
+  ]
   labels = {
     "org.opencontainers.image.title" = "HPCX Base Image"
     "org.opencontainers.image.description" = "Custom Ubuntu 24.04 base with CUDA 12.8.1 and HPC-X"
