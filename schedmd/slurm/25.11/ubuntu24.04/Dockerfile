@@ -47,6 +47,7 @@ COPY --from=slurm-src /workspace/${SLURM_DIR} ${SLURM_DIR}
 
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   --mount=type=cache,target=/var/lib/apt,sharing=locked <<EOR
+set -xeuo pipefail
 
 apt-get update && apt-get install -y libjson-c-dev libhttp-parser-dev libjwt-dev libdbus-1-dev libbpf-dev
 
@@ -66,7 +67,6 @@ make -j install
 rm -rf /etc/slurm
 cd /
 rm -rf /tmp/slurm-src
-
 EOR
 
 ARG SLURM_USER=slurm
@@ -135,6 +135,13 @@ WORKDIR /tmp/
 # Ref: https://slurm.schedmd.com/quickstart_admin.html#pkg_install
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   --mount=type=cache,target=/var/lib/apt,sharing=locked <<EOR
+# Install Packages
+set -xeuo pipefail
+apt-get -qq update
+apt-get -qq -y install --no-install-recommends --fix-broken \
+  gawk socat \
+  openssh-server \
+  authselect sssd sssd-ad sssd-ldap libpam-sss libnss-sss
 # Configure
 mkdir -p /var/spool/slurmd/
 sed -i -E "s/^passwd:[[:space:]]+/&slurm /g" /etc/nsswitch.conf
