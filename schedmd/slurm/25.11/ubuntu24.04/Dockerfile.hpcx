@@ -1,0 +1,289 @@
+# syntax=docker/dockerfile:1
+# SPDX-FileCopyrightText: Copyright (C) Crusoe.
+# SPDX-License-Identifier: Apache-2.0
+
+################################################################################
+
+ARG CUDA_VERSION=12.8.1
+ARG OS_DISTRO=ubuntu24.04
+ARG BASE_IMAGE=nvidia/cuda:${CUDA_VERSION}-devel-${OS_DISTRO}
+
+################################################################################
+FROM ${BASE_IMAGE} AS base
+
+ENV NV_CUDNN_VERSION='9.13.0.50-1'
+ENV NV_CUDNN_PACKAGE_NAME="libcudnn9-cuda-${CUDA_VERSION%%.*}"
+ENV NV_CUDNN_PACKAGE="libcudnn9-cuda-${CUDA_VERSION%%.*}=${NV_CUDNN_VERSION}"
+ENV NV_CUDNN_PACKAGE_DEV="libcudnn9-dev-cuda-${CUDA_VERSION%%.*}=${NV_CUDNN_VERSION}"
+ARG NV_CUDNN_PACKAGE_HEADERS="libcudnn9-headers-cuda-${CUDA_VERSION%%.*}=${NV_CUDNN_VERSION}"
+ARG DEBIAN_FRONTEND=noninteractive
+
+LABEL com.nvidia.cudnn.version="${NV_CUDNN_VERSION}"
+
+RUN apt-get -qq update && \
+    apt-get -qq install -y \
+        --no-install-recommends \
+        "${NV_CUDNN_PACKAGE}" \
+        "${NV_CUDNN_PACKAGE_DEV}" \
+        "${NV_CUDNN_PACKAGE_HEADERS}" && \
+    apt-mark hold "${NV_CUDNN_PACKAGE_NAME}" && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN apt-get -qq update && \
+    apt-get -qq install -y \
+        --allow-change-held-packages \
+        --no-install-recommends \
+        --allow-downgrades \
+        build-essential libtool autoconf automake autotools-dev unzip \
+        ca-certificates \
+        wget curl openssh-server vim environment-modules \
+        iputils-ping net-tools \
+        libnuma1 libsubunit0 libpci-dev \
+        libpmix-dev \
+        datacenter-gpu-manager \
+        git && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+# Mellanox OFED (latest)
+RUN wget -qO - https://www.mellanox.com/downloads/ofed/RPM-GPG-KEY-Mellanox | gpg --dearmor -o /usr/share/keyrings/mellanox-ofed-keyring.gpg
+RUN echo "deb [signed-by=/usr/share/keyrings/mellanox-ofed-keyring.gpg] https://linux.mellanox.com/public/repo/mlnx_ofed/latest/ubuntu24.04/$(dpkg --print-architecture) ./" > /etc/apt/sources.list.d/mellanox_mlnx_ofed.list
+
+RUN apt-get -qq update \
+    && apt-get -qq install -y --no-install-recommends \
+    ibverbs-utils libibverbs-dev libibumad3 libibumad-dev librdmacm-dev rdmacm-utils infiniband-diags ibverbs-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+
+FROM base AS builder-base
+RUN apt-get -qq update && \
+    apt-get -qq install -y --no-install-recommends \
+      build-essential devscripts debhelper fakeroot pkg-config check && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+
+FROM builder-base AS libnccl2
+# NCCL
+ARG TARGET_NCCL_VERSION='2.28.7-1'
+ARG CUDA_ARCH_LIST='80 89 90 100 120'
+# Converts CUDA_ARCH_LIST to '-gencode=arch=compute_XX,code=sm_XX -gencode=...' format with PTX for the last listed arch
+RUN case "${CUDA_VERSION}" in 12.[0-7].*) \
+      CUDA_ARCH_LIST="${CUDA_ARCH_LIST% 100 120}" ;; \
+    esac && \
+    NVCC_GENCODE="$( \
+    echo "${CUDA_ARCH_LIST}" | sed -e \
+      's:\S\+:-gencode=arch=compute_\0,code=sm_\0:g; s:_[[:digit:]]\+$:\0 -gencode=arch=compute\0,code=compute\0:' \
+    )" && \
+    BUILD_THREADS="$(echo "${NVCC_GENCODE}" | wc -w)" && \
+    if [ "$(uname -m)" = "aarch64" ]; then MAKE_JOBS=4; else MAKE_JOBS=20; fi && \
+    mkdir /tmp/build && \
+    cd /tmp/build && \
+    wget -qO- "https://github.com/NVIDIA/nccl/archive/refs/tags/v${TARGET_NCCL_VERSION}.tar.gz" \
+    | tar --strip-components=1 -xzf - && \
+    NVCC_APPEND_FLAGS="--threads=${BUILD_THREADS}" \
+      make -j${MAKE_JOBS} pkg.debian.build NVCC_GENCODE="${NVCC_GENCODE}" && \
+    cd build/pkg/deb && \
+    mkdir /tmp/libnccl2 && \
+    mv ./libnccl*.deb /tmp/libnccl2/ && \
+    cd /tmp && \
+    rm -r /tmp/build
+
+
+FROM builder-base AS gdrcopy
+# GDRCopy userspace components (2.4)
+RUN mkdir /tmp/build /tmp/gdrcopy && \
+    cd /tmp/build && \
+    wget -qO- 'https://github.com/NVIDIA/gdrcopy/archive/refs/tags/v2.4.tar.gz' | tar xzf - && \
+    CUDA=/usr/local/cuda ./gdrcopy-2.4/packages/build-deb-packages.sh -k && \
+    mv ./gdrcopy-tests_2.4*.deb ./libgdrapi_2.4*.deb /tmp/gdrcopy/ && \
+    cd /tmp && \
+    rm -r /tmp/build
+
+
+FROM builder-base AS nvbandwidth
+ARG NVBANDWIDTH_VERSION='0.8'
+ARG CUDA_ARCH_LIST='80;89;90;100;120'
+RUN case "${CUDA_VERSION}" in 12.[0-7].*) \
+      CUDA_ARCH_LIST="${CUDA_ARCH_LIST%;100*}"; \
+    esac && \
+    mkdir /tmp/build && \
+    cd /tmp/build && \
+    apt-get -qq update && \
+    apt-get -qq install --no-install-recommends -y \
+      libboost-program-options-dev cmake && \
+    apt-get clean && \
+    wget -qO- "https://github.com/NVIDIA/nvbandwidth/archive/refs/tags/v${NVBANDWIDTH_VERSION}.tar.gz" \
+    | tar --strip-components=1 -xzf - && \
+    cmake -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCH_LIST}" . && \
+    make -j20 && \
+    mkdir -p /tmp/nvbandwidth/usr/bin && \
+    install nvbandwidth /tmp/nvbandwidth/usr/bin/ && \
+    cd /tmp && \
+    rm -r /tmp/build
+
+
+FROM builder-base AS hpcx
+# HPC-X
+# grep + sed is used as a workaround to update hardcoded pkg-config / libtools archive / CMake prefixes
+RUN if [ "$(uname -m)" = "x86_64" ]; then \
+    ARCH="x86_64"; \
+    else \
+    ARCH="aarch64"; \
+    fi \
+    && \
+    case "${CUDA_VERSION}" in \
+    12.*) \
+    HPCX_VERSION="v2.25.1"; \
+    ;; \
+    *) \
+    HPCX_VERSION="v2.24.1"; \
+    ;; \
+    esac \
+    && \
+    cd /tmp && \
+    HPCX_DIR="/opt/hpcx" && \
+    CUDA_MAJOR=cuda$(echo "${CUDA_VERSION}" | cut -d. -f1) && \
+    DISTRO_NAME=$(. /etc/os-release && echo "${ID}${VERSION_ID}") && \
+    wget -q -O - https://content.mellanox.com/hpc/hpc-x/${HPCX_VERSION}_${CUDA_MAJOR}/hpcx-${HPCX_VERSION}-gcc-doca_ofed-${DISTRO_NAME}-${CUDA_MAJOR}-${ARCH}.tbz | tar xjf - && \
+    DIST_NAME=$(ls -1 | grep "^hpcx-${HPCX_VERSION}") && \
+    grep -IrlF "/build-result/${DIST_NAME}" "${DIST_NAME}" | xargs -rd'\n' sed -i -e "s:/build-result/${DIST_NAME}:${HPCX_DIR}:g" && \
+    mkdir -p $(dirname ${HPCX_DIR}) && \
+    mv "${DIST_NAME}" ${HPCX_DIR} && \
+    rm -rf ${HPCX_DIR}/ompi
+
+# Rebuild OpenMPI to support SLURM
+SHELL ["/bin/bash", "-c"]
+RUN source /opt/hpcx/hpcx-init.sh && \
+    hpcx_load && \
+    cd /opt/hpcx/sources && \
+    tar -xzf openmpi-gitclone.tar.gz && \
+    cd openmpi-gitclone && \
+    if [ "$(uname -m)" = "aarch64" ]; then MAKE_JOBS=4; else MAKE_JOBS=20; fi && \
+    ./configure -C --prefix=/opt/hpcx/ompi \
+      --with-hcoll=/opt/hpcx/hcoll --with-ucx=/opt/hpcx/ucx \
+      --with-platform=contrib/platform/mellanox/optimized \
+      --with-slurm --with-hwloc --with-libevent \
+      --with-pmix="/usr/lib/$(gcc -print-multiarch)/pmix2" \
+      --without-xpmem --with-cuda --with-ucc=/opt/hpcx/ucc && \
+      make -j${MAKE_JOBS} && \
+      make -j${MAKE_JOBS} install && \
+      cd .. && \
+      rm -r openmpi-gitclone
+SHELL ["/bin/sh", "-c"]
+
+
+# This stage is mostly shared between amd64 and arm64,
+# but arm64 has a few extra steps appended to it later
+FROM base AS base-amd64
+RUN --mount=type=bind,from=libnccl2,source=/tmp/libnccl2,target=/tmp/install \
+    cd /tmp/install && dpkg -i *.deb
+RUN --mount=type=bind,from=gdrcopy,source=/tmp/gdrcopy,target=/tmp/install \
+    cd /tmp/install && dpkg -i *.deb
+
+COPY --link --from=nvbandwidth /tmp/nvbandwidth/ /
+COPY --link --from=hpcx /opt/hpcx /opt/hpcx
+
+RUN ldconfig
+
+# HPC-X Environment variables
+COPY ./capture-hpcx-env.sh /tmp
+SHELL ["/bin/bash", "-c"]
+RUN source /opt/hpcx/hpcx-init.sh && \
+    hpcx_load && \
+    # Uncomment to stop a run early with the ENV definitions for the below section
+    # /tmp/capture-hpcx-env.sh ENV && false && \
+    # Preserve environment variables in new login shells \
+    alias install='install --owner=0 --group=0' && \
+    /tmp/capture-hpcx-env.sh export \
+      | install --mode=644 /dev/stdin /etc/profile.d/hpcx-env.sh && \
+    # Preserve environment variables (except *PATH*) when sudoing
+    install -d --mode=0755 /etc/sudoers.d && \
+    /tmp/capture-hpcx-env.sh \
+      | sed -E -e '{ \
+          # Convert NAME=value to just NAME \
+          s:^([^=]+)=.*$:\1:g ; \
+          # Filter out any variables with PATH in their names \
+          /PATH/d ; \
+          # Format them into /etc/sudoers env_keep directives \
+          s:^.*$:Defaults env_keep += "\0":g \
+        }' \
+      | install --mode=440 /dev/stdin /etc/sudoers.d/hpcx-env && \
+    # Register shared libraries with ld regardless of LD_LIBRARY_PATH
+    echo $LD_LIBRARY_PATH | tr ':' '\n' \
+      | install --mode=644 /dev/stdin /etc/ld.so.conf.d/hpcx.conf && \
+    rm /tmp/capture-hpcx-env.sh
+SHELL ["/bin/sh", "-c"]
+
+# The following envs are from the output of the capture-hpcx-env.sh ENV script.
+# Uncomment "/tmp/capture-hpcx-env.sh ENV" above to run the script
+# as part of a Docker build. Copy-paste the updated output in here.
+# These ENVs need to be updated on new HPC-X install, different base image
+# or any path related modifications before this stage in the Dockerfile.
+
+# Begin auto-generated paths
+ENV HPCX_DIR=/opt/hpcx
+ENV HPCX_UCX_DIR=/opt/hpcx/ucx
+ENV HPCX_UCC_DIR=/opt/hpcx/ucc
+ENV HPCX_SHARP_DIR=/opt/hpcx/sharp
+ENV HPCX_NCCL_RDMA_SHARP_PLUGIN_DIR=/opt/hpcx/nccl_rdma_sharp_plugin
+ENV HPCX_HCOLL_DIR=/opt/hpcx/hcoll
+ENV HPCX_MPI_DIR=/opt/hpcx/ompi
+ENV HPCX_OSHMEM_DIR=/opt/hpcx/ompi
+ENV HPCX_MPI_TESTS_DIR=/opt/hpcx/ompi/tests
+ENV HPCX_OSU_DIR=/opt/hpcx/ompi/tests/osu-micro-benchmarks
+ENV HPCX_OSU_CUDA_DIR=/opt/hpcx/ompi/tests/osu-micro-benchmarks-cuda
+ENV HPCX_IPM_DIR=""
+ENV HPCX_CLUSTERKIT_DIR=/opt/hpcx/clusterkit
+ENV OMPI_HOME=/opt/hpcx/ompi
+ENV MPI_HOME=/opt/hpcx/ompi
+ENV OSHMEM_HOME=/opt/hpcx/ompi
+ENV OPAL_PREFIX=/opt/hpcx/ompi
+ENV OLD_PATH=/usr/local/nvidia/bin:/usr/local/cuda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ENV PATH=/opt/hpcx/sharp/bin:/opt/hpcx/clusterkit/bin:/opt/hpcx/hcoll/bin:/opt/hpcx/ucc/bin:/opt/hpcx/ucx/bin:/opt/hpcx/ompi/bin:/usr/local/nvidia/bin:/usr/local/cuda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+ENV OLD_LD_LIBRARY_PATH=/usr/local/nvidia/lib:/usr/local/nvidia/lib64
+ENV LD_LIBRARY_PATH=/opt/hpcx/nccl_rdma_sharp_plugin/lib:/opt/hpcx/ucc/lib/ucc:/opt/hpcx/ucc/lib:/opt/hpcx/ucx/lib/ucx:/opt/hpcx/ucx/lib:/opt/hpcx/sharp/lib:/opt/hpcx/hcoll/lib:/opt/hpcx/ompi/lib:/usr/local/nvidia/lib:/usr/local/nvidia/lib64
+ENV OLD_LIBRARY_PATH=/usr/local/cuda/lib64/stubs
+ENV LIBRARY_PATH=/opt/hpcx/nccl_rdma_sharp_plugin/lib:/opt/hpcx/ompi/lib:/opt/hpcx/sharp/lib:/opt/hpcx/ucc/lib:/opt/hpcx/ucx/lib:/opt/hpcx/hcoll/lib:/opt/hpcx/ompi/lib:/usr/local/cuda/lib64/stubs
+ENV OLD_CPATH=""
+ENV CPATH=/opt/hpcx/ompi/include:/opt/hpcx/ucc/include:/opt/hpcx/ucx/include:/opt/hpcx/sharp/include:/opt/hpcx/hcoll/include
+ENV PKG_CONFIG_PATH=/opt/hpcx/hcoll/lib/pkgconfig:/opt/hpcx/sharp/lib/pkgconfig:/opt/hpcx/ucx/lib/pkgconfig:/opt/hpcx/ompi/lib/pkgconfig
+# End of auto-generated paths
+
+FROM base-amd64 AS base-arm64
+# Clusterkit isn't included in HPC-X on ARM64 (as of v2.22)
+ENV HPCX_CLUSTERKIT_DIR=""
+ENV PATH=/opt/hpcx/sharp/bin/bin:/opt/hpcx/hcoll/bin:/opt/hpcx/ucc/bin:/opt/hpcx/ucx/bin:/opt/hpcx/ompi/bin:/usr/local/nvidia/bin:/usr/local/cuda/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+FROM base-${TARGETARCH}
+# Disable UCX VFS to stop errors about fuse mount failure
+ENV UCX_VFS_ENABLE=no
+
+# NCCL SHARP PLugin (master)
+### Disabled as HPC-X has a recent enough version at this time
+# RUN cd /tmp && \
+#     wget -q https://github.com/Mellanox/nccl-rdma-sharp-plugins/archive/refs/heads/master.zip && \
+#     unzip master.zip && \
+#     cd nccl-rdma-sharp-plugins-master && \
+#     ./autogen.sh && \
+#     ./configure --with-cuda=/usr/local/cuda-${CUDA_VERSION_MAJOR} --prefix=/usr && \
+#     make && \
+#     make install && \
+#     rm /opt/hpcx/nccl_rdma_sharp_plugin/lib/* && \
+#     rm -r /tmp/*
+
+# NCCL Tests
+ENV NCCL_TESTS_COMMITISH=9a5c15461abcef145b907c54d04aea4e8d1cb21f
+WORKDIR /opt/nccl-tests
+RUN wget -q -O - https://github.com/NVIDIA/nccl-tests/archive/${NCCL_TESTS_COMMITISH}.tar.gz | tar --strip-components=1 -xzf - && \
+    make -j20 MPI=1 && \
+    ln -s /opt/nccl-tests /opt/nccl_tests
+
+RUN ldconfig
+
+# SSH dependencies for MPI
+RUN sed -i 's/[ #]\(.*StrictHostKeyChecking \).*/ \1no/g' /etc/ssh/ssh_config && \
+    echo "    UserKnownHostsFile /dev/null" >> /etc/ssh/ssh_config && \
+    sed -i 's/#\(StrictModes \).*/\1no/g' /etc/ssh/sshd_config && \
+    mkdir /var/run/sshd -p

@@ -21,7 +21,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 set -xeuo pipefail
 apt-get -qq update
 apt-get -qq -y install --no-install-recommends \
-  ca-certificates wget jq
+  ca-certificates wget jq tar
 # Determine Latest Versions
 ENROOT_VERSION="$(wget -qO - https://api.github.com/repos/NVIDIA/enroot/releases/latest | jq -r '.tag_name')"
 ENROOT_VERSION="${ENROOT_VERSION/#v}"
@@ -38,25 +38,8 @@ wget -N -P /etc/enroot/hooks.d/ \
   https://raw.githubusercontent.com/NVIDIA/enroot/refs/tags/v${ENROOT_VERSION}/conf/hooks/extra/50-slurm-pytorch.sh
 chmod 755 -R /etc/enroot/hooks.d/
 wget -N -O pyxis.tar.gz https://github.com/NVIDIA/pyxis/archive/refs/tags/v${PYXIS_VERSION}.tar.gz
-EOR
-
-# Ref: https://github.com/NVIDIA/pyxis?tab=readme-ov-file#with-a-deb-package
-# Ref: https://github.com/NVIDIA/enroot/blob/25.11/doc/installation.md
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-  --mount=type=cache,target=/var/lib/apt,sharing=locked <<EOR
-# Generate Pyxis DEB
-set -xeuo pipefail
-apt-get -qq update
-apt-get -qq -y install --no-install-recommends \
-  build-essential \
-  git gcc make libcap2-bin libtool automake libmd-dev \
-  fakeroot devscripts equivs \
-  tar
 mkdir pyxis
 tar -zxvf pyxis.tar.gz -C pyxis --strip-components=1
-cd pyxis
-make orig
-make deb
 EOR
 
 ################################################################################
@@ -68,20 +51,24 @@ COPY --from=download /tmp/*.deb ./
 COPY --from=download /etc/enroot/hooks.d/* /etc/enroot/hooks.d/
 COPY --from=download /usr/share/bash-completion/completions/* /usr/share/bash-completion/completions/
 
-# Ref: https://github.com/NVIDIA/pyxis?tab=readme-ov-file#with-a-deb-package
+COPY --from=download /tmp/pyxis /tmp/pyxis
+
+# Ref: https://github.com/NVIDIA/pyxis?tab=readme-ov-file#with-make-install
 # Ref: https://github.com/NVIDIA/enroot/blob/25.11/doc/installation.md
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   --mount=type=cache,target=/var/lib/apt,sharing=locked <<EOR
-# Install Pyxis+Enroot
+# Install Enroot
 set -xeuo pipefail
 apt-get -qq update
-apt-get -qq -y upgrade
 apt-get -qq -y install --no-install-recommends --fix-broken \
   ca-certificates gpg \
   bash-completion \
   fuse-overlayfs pigz squashfuse \
   ./*.deb
 rm *.deb
+# Install Pyxis
+cd /tmp/pyxis
+make install
 # Configure
 mkdir -m 777 -p /usr/share/enroot/enroot-data/
 mkdir -m 755 -p /run/enroot/
@@ -117,20 +104,24 @@ COPY --from=download /tmp/*.deb ./
 COPY --from=download /etc/enroot/hooks.d/* /etc/enroot/hooks.d/
 COPY --from=download /usr/share/bash-completion/completions/* /usr/share/bash-completion/completions/
 
-# Ref: https://github.com/NVIDIA/pyxis?tab=readme-ov-file#with-a-deb-package
+COPY --from=download /tmp/pyxis /tmp/pyxis
+
+# Ref: https://github.com/NVIDIA/pyxis?tab=readme-ov-file#with-make-install
 # Ref: https://github.com/NVIDIA/enroot/blob/25.11/doc/installation.md
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   --mount=type=cache,target=/var/lib/apt,sharing=locked <<EOR
-# Install Pyxis+Enroot
+# Install Enroot
 set -xeuo pipefail
 apt-get -qq update
-apt-get -qq -y upgrade
 apt-get -qq -y install --no-install-recommends --fix-broken \
   ca-certificates gpg \
   bash-completion \
   fuse-overlayfs pigz squashfuse \
   ./*.deb
 rm *.deb
+# Install Pyxis
+cd /tmp/pyxis
+make install
 # Configure
 mkdir -m 777 -p /usr/share/enroot/enroot-data/
 mkdir -m 755 -p /run/enroot/

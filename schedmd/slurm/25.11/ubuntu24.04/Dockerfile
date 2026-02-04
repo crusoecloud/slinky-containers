@@ -6,7 +6,8 @@
 
 ARG SLURM_VERSION=25.11-latest
 ARG SLURM_DIR=slurm
-ARG PARENT_IMAGE=ubuntu:24.04
+ARG REGISTRY
+ARG PARENT_IMAGE=${REGISTRY}/hpcx-base:cuda12.8.1-ubuntu24.04
 
 ################################################################################
 FROM alpine:latest AS slurm-src
@@ -30,7 +31,7 @@ rm ${SLURM_TAR}.tar.bz2
 EOR
 
 ################################################################################
-FROM ${PARENT_IMAGE} AS build
+FROM ${PARENT_IMAGE} AS base
 
 SHELL ["bash", "-c"]
 
@@ -45,32 +46,28 @@ WORKDIR /tmp/
 
 COPY --from=slurm-src /workspace/${SLURM_DIR} ${SLURM_DIR}
 
-# Ref: https://slurm.schedmd.com/quickstart_admin.html#debuild
+# Ref: https://slurm.schedmd.com/quickstart_admin.html#manual_build
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   --mount=type=cache,target=/var/lib/apt,sharing=locked <<EOR
-# Build Slurm
+# Install Dependencies
 set -xeuo pipefail
-apt-get -qq update
-apt-get -qq -y upgrade
-apt-get -qq -y install --no-install-recommends \
-  build-essential fakeroot devscripts equivs
-## Build
-mk-build-deps -ir --tool='apt-get -y -o Debug::pkgProblemResolver=yes --no-install-recommends' ${SLURM_DIR}/debian/control >/dev/null
-( cd ${SLURM_DIR} && debuild -b -uc -us >/dev/null )
+apt-get update && apt-get install -y libjson-c-dev libhttp-parser-dev libjwt-dev libdbus-1-dev libbpf-dev
+# Build Slurm
+cd /tmp/${SLURM_DIR}
+./configure \
+    --with-pmix="/usr/lib/$(gcc -print-multiarch)/pmix2" \
+    --with-jwt=/usr/ \
+    --with-http-parser=/usr/ \
+    --with-json=/usr/ \
+    --sysconfdir=/etc/slurm \
+    --with-nvml \
+    --without-munge
+make -j install
+# Cleanup
+rm -rf /etc/slurm
+cd /
+rm -rf /tmp/slurm-src
 EOR
-
-################################################################################
-FROM ${PARENT_IMAGE} AS base
-
-SHELL ["bash", "-c"]
-
-ARG DEBIAN_FRONTEND=noninteractive
-
-ARG SLURM_VERSION
-ENV SLURM_VERSION=${SLURM_VERSION}
-
-USER root
-WORKDIR /tmp/
 
 ARG SLURM_USER=slurm
 ARG SLURM_USER_UID=401
@@ -91,36 +88,17 @@ for user in $(ls /home/); do
 done
 EOR
 
-COPY --from=build /tmp/*.deb /tmp/*.ddeb /tmp/
-
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   --mount=type=cache,target=/var/lib/apt,sharing=locked <<EOR
 # Install Dependencies
 set -xeuo pipefail
 apt-get -qq update
-apt-get -qq -y upgrade
 # Init System
 apt-get -qq -y install --no-install-recommends \
   supervisor tini
 # Debug
 apt-get -qq -y install --no-install-recommends \
   procps iputils-ping ncurses-bin
-EOR
-
-################################################################################
-FROM base AS base-extra
-
-SHELL ["bash", "-c"]
-
-ARG DEBIAN_FRONTEND=noninteractive
-
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-  --mount=type=cache,target=/var/lib/apt,sharing=locked <<EOR
-# Install Extra Packages
-set -xeuo pipefail
-apt-get -qq update
-apt-get -qq -y install --no-install-recommends \
-  openmpi-bin
 EOR
 
 ################################################################################
@@ -133,25 +111,6 @@ ARG DEBIAN_FRONTEND=noninteractive
 USER root
 WORKDIR /tmp/
 
-# Ref: https://slurm.schedmd.com/quickstart_admin.html#pkg_install
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-  --mount=type=cache,target=/var/lib/apt,sharing=locked <<EOR
-# Install Slurm Packages
-set -xeuo pipefail
-apt-get -qq update
-apt-get -qq -y install --no-install-recommends --fix-broken \
-  socat \
-  ./slurm-smd-client_[0-9]*.deb \
-  ./slurm-smd-client-dbgsym_[0-9]*.ddeb \
-  ./slurm-smd-dev_[0-9]*.deb \
-  ./slurm-smd-doc_[0-9]*.deb \
-  ./slurm-smd-slurmctld_[0-9]*.deb \
-  ./slurm-smd-slurmctld-dbgsym_[0-9]*.ddeb \
-  ./slurm-smd_[0-9]*.deb \
-  ./slurm-smd-dbgsym_[0-9]*.ddeb
-rm *.deb && rm *.ddeb
-EOR
-
 COPY files/etc/supervisor/supervisord.conf /etc/supervisor/
 COPY \
   files/etc/supervisor/conf.d/slurmctld.conf \
@@ -162,7 +121,7 @@ EXPOSE 6817/tcp
 ENTRYPOINT ["entrypoint.sh"]
 
 ################################################################################
-FROM base-extra AS slurmd
+FROM base AS slurmd
 
 SHELL ["bash", "-c"]
 
@@ -171,29 +130,15 @@ ARG DEBIAN_FRONTEND=noninteractive
 USER root
 WORKDIR /tmp/
 
-# Ref: https://slurm.schedmd.com/quickstart_admin.html#pkg_install
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   --mount=type=cache,target=/var/lib/apt,sharing=locked <<EOR
-# Install Slurm Packages
+# Install Packages
 set -xeuo pipefail
 apt-get -qq update
 apt-get -qq -y install --no-install-recommends --fix-broken \
   gawk socat \
   openssh-server \
-  authselect sssd sssd-ad sssd-ldap libpam-sss libnss-sss \
-  ./slurm-smd-client_[0-9]*.deb \
-  ./slurm-smd-client-dbgsym_[0-9]*.ddeb \
-  ./slurm-smd-dev_[0-9]*.deb \
-  ./slurm-smd-doc_[0-9]*.deb \
-  ./slurm-smd-libnss-slurm_[0-9]*.deb \
-  ./slurm-smd-libnss-slurm-dbgsym_[0-9]*.ddeb \
-  ./slurm-smd-libpam-slurm-adopt_[0-9]*.deb \
-  ./slurm-smd-libpmi2-0_[0-9]*.deb \
-  ./slurm-smd-slurmd_[0-9]*.deb \
-  ./slurm-smd-slurmd-dbgsym_[0-9]*.ddeb \
-  ./slurm-smd_[0-9]*.deb \
-  ./slurm-smd-dbgsym_[0-9]*.ddeb
-rm *.deb && rm *.ddeb
+  authselect sssd sssd-ad sssd-ldap libpam-sss libnss-sss
 # Configure
 mkdir -p /var/spool/slurmd/
 sed -i -E "s/^passwd:[[:space:]]+/&slurm /g" /etc/nsswitch.conf
@@ -226,21 +171,6 @@ ARG DEBIAN_FRONTEND=noninteractive
 USER root
 WORKDIR /tmp/
 
-# Ref: https://slurm.schedmd.com/quickstart_admin.html#pkg_install
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-  --mount=type=cache,target=/var/lib/apt,sharing=locked <<EOR
-# Install Slurm Packages
-set -xeuo pipefail
-apt-get -qq update
-apt-get -qq -y install --no-install-recommends --fix-broken \
-  ./slurm-smd-doc_[0-9]*.deb \
-  ./slurm-smd-slurmdbd_[0-9]*.deb \
-  ./slurm-smd-slurmdbd-dbgsym_[0-9]*.ddeb \
-  ./slurm-smd_[0-9]*.deb \
-  ./slurm-smd-dbgsym_[0-9]*.ddeb
-rm *.deb && rm *.ddeb
-EOR
-
 EXPOSE 6819/tcp
 ENTRYPOINT ["tini", "-g", "--", "slurmdbd", "-D"]
 
@@ -254,27 +184,12 @@ ARG DEBIAN_FRONTEND=noninteractive
 USER root
 WORKDIR /tmp/
 
-# Ref: https://slurm.schedmd.com/quickstart_admin.html#pkg_install
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-  --mount=type=cache,target=/var/lib/apt,sharing=locked <<EOR
-# Install Slurm Packages
-set -xeuo pipefail
-apt-get -qq update
-apt-get -qq -y install --no-install-recommends --fix-broken \
-  ./slurm-smd-doc_[0-9]*.deb \
-  ./slurm-smd-slurmrestd_[0-9]*.deb \
-  ./slurm-smd-slurmrestd-dbgsym_[0-9]*.ddeb \
-  ./slurm-smd_[0-9]*.deb \
-  ./slurm-smd-dbgsym_[0-9]*.ddeb
-rm *.deb && rm *.ddeb
-EOR
-
 EXPOSE 6820/tcp
 ENTRYPOINT ["tini", "-g", "--", "slurmrestd"]
 CMD ["0.0.0.0:6820"]
 
 ################################################################################
-FROM base-extra AS sackd
+FROM base AS sackd
 
 SHELL ["bash", "-c"]
 
@@ -304,22 +219,9 @@ apt-get -qq -y install --no-install-recommends kubectl
 rm *.txt
 EOR
 
-# Ref: https://slurm.schedmd.com/quickstart_admin.html#pkg_install
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   --mount=type=cache,target=/var/lib/apt,sharing=locked <<EOR
-# Install Slurm Packages
 set -xeuo pipefail
-apt-get -qq update
-apt-get -qq -y install --no-install-recommends --fix-broken \
-  socat \
-  ./slurm-smd-client_[0-9]*.deb \
-  ./slurm-smd-client-dbgsym_[0-9]*.ddeb \
-  ./slurm-smd-doc_[0-9]*.deb \
-  ./slurm-smd-sackd_[0-9]*.deb \
-  ./slurm-smd-sackd-dbgsym_[0-9]*.ddeb \
-  ./slurm-smd_[0-9]*.deb \
-  ./slurm-smd-dbgsym_[0-9]*.ddeb
-rm *.deb && rm *.ddeb
 # Prepare Directories
 mkdir -p /run/slurm/
 chown ${SLURM_USER}:${SLURM_USER} /run/slurm
@@ -345,7 +247,6 @@ ARG DEBIAN_FRONTEND=noninteractive
 USER root
 WORKDIR /tmp/
 
-# Ref: https://slurm.schedmd.com/quickstart_admin.html#pkg_install
 RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   --mount=type=cache,target=/var/lib/apt,sharing=locked <<EOR
 # Install Packages
@@ -354,7 +255,8 @@ apt-get -qq update
 apt-get -qq -y install --no-install-recommends \
   socat \
   openssh-server \
-  authselect sssd sssd-ad sssd-ldap libpam-sss libnss-sss
+  authselect sssd sssd-ad sssd-ldap libpam-sss libnss-sss \
+  sudo
 # Configure
 mkdir -p /etc/authselect
 authselect select sssd with-mkhomedir --force
