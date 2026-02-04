@@ -42,6 +42,7 @@ function "format_tag" {
 target "_slurm" {
   args = {
     SLURM_VERSION = slurm_version
+    REGISTRY = REGISTRY
   }
   labels = {
     # Ref: https://github.com/opencontainers/image-spec/blob/v1.0/annotations.md
@@ -139,6 +140,19 @@ target "_login" {
     "name" = "Slurm Login Container"
     "summary" = "An authenticated environment to submit Slurm workload from."
     "description" = "An authenticated environment to submit Slurm workload from."
+  }
+}
+
+target "hpcx_base" {
+  context = context
+  dockerfile = "Dockerfile.hpcx"
+  tags = [
+    format_tag(REGISTRY, "hpcx-base", "cuda12.8.1", linux_flavor, SUFFIX),
+  ]
+  labels = {
+    "org.opencontainers.image.title" = "HPCX Base Image"
+    "org.opencontainers.image.description" = "Custom Ubuntu 24.04 base with CUDA 12.8.1 and HPC-X"
+    "org.opencontainers.image.vendor" = "Crusoe"
   }
 }
 
