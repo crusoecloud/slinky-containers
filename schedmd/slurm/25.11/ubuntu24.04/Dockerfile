@@ -51,7 +51,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   --mount=type=cache,target=/var/lib/apt,sharing=locked <<EOR
 # Install Dependencies
 set -xeuo pipefail
-apt-get update && apt-get install -y libjson-c-dev libhttp-parser-dev libjwt-dev libdbus-1-dev libbpf-dev
+apt-get update && apt-get install -y libjson-c-dev libhttp-parser-dev libjwt-dev libdbus-1-dev libbpf-dev libpython3.12-dev
 # Build Slurm
 cd /tmp/${SLURM_DIR}
 ./configure \
