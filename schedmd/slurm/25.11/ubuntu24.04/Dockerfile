@@ -41,6 +41,9 @@ ARG SLURM_VERSION
 ENV SLURM_VERSION=${SLURM_VERSION}
 ARG SLURM_DIR
 
+ARG GH_CLI_VERSION=2.86.0
+ARG UV_VERSION=0.10.1
+
 USER root
 WORKDIR /tmp/
 
@@ -51,7 +54,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   --mount=type=cache,target=/var/lib/apt,sharing=locked <<EOR
 # Install Dependencies
 set -xeuo pipefail
-apt-get update && apt-get install -y libjson-c-dev libhttp-parser-dev libjwt-dev libdbus-1-dev libbpf-dev libpython3.12-dev
+apt-get update && apt-get install -y libjson-c-dev libhttp-parser-dev libjwt-dev libdbus-1-dev libbpf-dev
 # Build Slurm
 cd /tmp/${SLURM_DIR}
 ./configure \
@@ -99,7 +102,31 @@ apt-get -qq -y install --no-install-recommends \
 # Debug
 apt-get -qq -y install --no-install-recommends \
   procps iputils-ping ncurses-bin
+# Install extra packages
+apt-get -qq -y install --no-install-recommends \
+  libpython3.12-dev python3-pip nvtop
+# Install git-lfs
+# TODO: Replace with explicitly downloading GPG key and APT repo file + explicit versioning
+curl -fsSL -o /tmp/git-lfs-deb.sh https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh \
+  && bash /tmp/git-lfs-deb.sh \
+  && apt-get -qq -y install --no-install-recommends git-lfs \
+  && rm /tmp/git-lfs-deb.sh
+# Install github cli
+mkdir -p -m 755 /etc/apt/keyrings \
+  && curl -fsSL -o /etc/apt/keyrings/githubcli-archive-keyring.gpg https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+  && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
+  && apt-get -qq update \
+  && apt-get -qq -y install --no-install-recommends \
+  gh=${GH_CLI_VERSION}
 EOR
+
+# TODO:
+# - uv can be installed in the user home directory instead of system-wide
+#   However, we currently don't create user home directories, so we install
+#   it system-wide. Remove this once we start creating user home directories
+RUN pip install --no-cache-dir --break-system-packages \
+  uv==${UV_VERSION}
 
 ################################################################################
 FROM base AS slurmctld
