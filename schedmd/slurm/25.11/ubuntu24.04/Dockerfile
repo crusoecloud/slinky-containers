@@ -121,12 +121,14 @@ mkdir -p -m 755 /etc/apt/keyrings \
   gh=${GH_CLI_VERSION}
 EOR
 
-# TODO:
-# - uv can be installed in the user home directory instead of system-wide
-#   However, we currently don't create user home directories, so we install
-#   it system-wide. Remove this once we start creating user home directories
-RUN pip install --no-cache-dir --break-system-packages \
-  uv==${UV_VERSION}
+# Install uv package manager
+RUN mkdir -p /tmp/uv-download \
+  && cd /tmp/uv-download \
+  && curl -fsSL -o uv-x86_64-unknown-linux-gnu.tar.gz https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz \
+  && tar -xzf uv-x86_64-unknown-linux-gnu.tar.gz \
+  && cd uv-x86_64-unknown-linux-gnu \
+  && install -m 755 uv uvx /usr/local/bin/ \
+  && rm -rf /tmp/uv-download
 
 ################################################################################
 FROM base AS slurmctld
