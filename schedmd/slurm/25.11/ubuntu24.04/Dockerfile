@@ -128,6 +128,7 @@ RUN mkdir -p /tmp/uv-download \
   && tar -xzf uv-x86_64-unknown-linux-gnu.tar.gz \
   && cd uv-x86_64-unknown-linux-gnu \
   && install -m 755 uv uvx /usr/local/bin/ \
+  && cd /tmp \
   && rm -rf /tmp/uv-download
 
 ################################################################################
