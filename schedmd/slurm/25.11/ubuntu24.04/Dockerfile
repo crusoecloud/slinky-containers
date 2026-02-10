@@ -104,7 +104,7 @@ apt-get -qq -y install --no-install-recommends \
   procps iputils-ping ncurses-bin
 # Install extra packages
 apt-get -qq -y install --no-install-recommends \
-  libpython3.12-dev python3-pip nvtop
+  libpython3.12-dev python3-pip nvtop emacs
 # Install git-lfs
 # TODO: Replace with explicitly downloading GPG key and APT repo file + explicit versioning
 curl -fsSL -o /tmp/git-lfs-deb.sh https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh \
