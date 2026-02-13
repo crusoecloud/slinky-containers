@@ -41,6 +41,9 @@ ARG SLURM_VERSION
 ENV SLURM_VERSION=${SLURM_VERSION}
 ARG SLURM_DIR
 
+ARG GH_CLI_VERSION=2.86.0
+ARG UV_VERSION=0.10.1
+
 USER root
 WORKDIR /tmp/
 
@@ -99,7 +102,34 @@ apt-get -qq -y install --no-install-recommends \
 # Debug
 apt-get -qq -y install --no-install-recommends \
   procps iputils-ping ncurses-bin
+# Install extra packages
+apt-get -qq -y install --no-install-recommends \
+  libpython3.12-dev python3-pip nvtop emacs
+# Install git-lfs
+# TODO: Replace with explicitly downloading GPG key and APT repo file + explicit versioning
+curl -fsSL -o /tmp/git-lfs-deb.sh https://packagecloud.io/install/repositories/github/git-lfs/script.deb.sh \
+  && bash /tmp/git-lfs-deb.sh \
+  && apt-get -qq -y install --no-install-recommends git-lfs \
+  && rm /tmp/git-lfs-deb.sh
+# Install github cli
+mkdir -p -m 755 /etc/apt/keyrings \
+  && curl -fsSL -o /etc/apt/keyrings/githubcli-archive-keyring.gpg https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+  && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
+  && apt-get -qq update \
+  && apt-get -qq -y install --no-install-recommends \
+  gh=${GH_CLI_VERSION}
 EOR
+
+# Install uv package manager
+RUN mkdir -p /tmp/uv-download \
+  && cd /tmp/uv-download \
+  && curl -fsSL -o uv-x86_64-unknown-linux-gnu.tar.gz https://github.com/astral-sh/uv/releases/download/${UV_VERSION}/uv-x86_64-unknown-linux-gnu.tar.gz \
+  && tar -xzf uv-x86_64-unknown-linux-gnu.tar.gz \
+  && cd uv-x86_64-unknown-linux-gnu \
+  && install -m 755 uv uvx /usr/local/bin/ \
+  && cd /tmp \
+  && rm -rf /tmp/uv-download
 
 ################################################################################
 FROM base AS slurmctld
