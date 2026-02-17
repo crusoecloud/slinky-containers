@@ -134,6 +134,13 @@ RUN mkdir -p /tmp/uv-download \
   && cd /tmp \
   && rm -rf /tmp/uv-download
 
+# Setup nsscache symlinks. We have to do this because /etc is mounted for
+# slurm configuration and individual mounting of files don't support auto
+# refresh
+RUN mkdir -p /var/lib/nsscache && \
+    ln -sf /var/lib/nsscache/passwd.cache /etc/passwd.cache && \
+    ln -sf /var/lib/nsscache/group.cache /etc/group.cache
+
 ################################################################################
 FROM base AS slurmctld
 
