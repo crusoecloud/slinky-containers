@@ -99,6 +99,9 @@ apt-get -qq update
 # Init System
 apt-get -qq -y install --no-install-recommends \
   supervisor tini
+# User Management
+apt-get -qq -y install --no-install-recommends \
+  libnss-cache
 # Debug
 apt-get -qq -y install --no-install-recommends \
   procps iputils-ping ncurses-bin
