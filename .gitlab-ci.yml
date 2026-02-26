@@ -1,0 +1,117 @@
+# GitLab CI/CD Pipeline for Slinky Containers
+# Automatically builds Slurm container images on every push
+
+# Workflow rules - when to run pipelines
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "push"'
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+
+# Pipeline stages
+stages:
+  - build
+  - publish
+
+# Default configuration for all jobs
+default:
+  image: docker:28-cli
+  services:
+    - docker:28-dind
+  before_script:
+    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+
+# Global variables
+variables:
+  # Docker configuration
+  DOCKER_DRIVER: overlay2
+  DOCKER_BUILDKIT: "1"
+  BUILDX_EXPERIMENTAL: "1"
+
+  # Build configuration (can be overridden via GitLab CI/CD settings)
+  SLURM_VERSION: "25.11"
+  LINUX_FLAVOR: "ubuntu24.04"
+  BUILD_GROUP: "all"  # Options: core, all, extras
+  BUILD_CONTEXT: "./schedmd/slurm"
+
+  # Image tagging strategy
+  IMAGE_TAG_UNIQUE: "${SLURM_VERSION}-${LINUX_FLAVOR}-${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}"
+  IMAGE_TAG_BRANCH: "${SLURM_VERSION}-${LINUX_FLAVOR}-${CI_COMMIT_REF_SLUG}-latest"
+  IMAGE_TAG_LATEST: "${SLURM_VERSION}-${LINUX_FLAVOR}-latest"
+
+# Build job - builds all container images
+build_images:
+  stage: build
+  script:
+    # Navigate to build context
+    - cd ${BUILD_CONTEXT}
+
+    # Setup buildx builder
+    - docker buildx create --use --name builder || docker buildx use builder
+
+    # Check if cache exists for this branch to speed up builds
+    - |
+      CACHE_REF="${CI_REGISTRY_IMAGE}/slurmctld:${IMAGE_TAG_BRANCH}"
+      if docker manifest inspect ${CACHE_REF} &>/dev/null; then
+        echo "Found existing cache, using it to speed up build"
+        export CACHE_FROM="--cache-from type=registry,ref=${CACHE_REF}"
+      else
+        echo "No cache found, building from scratch"
+        export CACHE_FROM=""
+      fi
+
+    # Build all images using docker bake
+    - |
+      echo "Building images with docker bake..."
+      docker buildx bake \
+        --file ./docker-bake.hcl \
+        --file ./${SLURM_VERSION}/${LINUX_FLAVOR}/slurm.hcl \
+        --set "*.cache-to=type=inline" \
+        ${CACHE_FROM} \
+        --set "*.platform=linux/amd64" \
+        --set "*.output=type=registry" \
+        --set "*.args.REGISTRY=${CI_REGISTRY_IMAGE}" \
+        --set "*.args.SUFFIX=${IMAGE_TAG_UNIQUE}" \
+        ${BUILD_GROUP}
+
+    # Re-tag images with branch-latest tags for easier reference
+    - |
+      echo "Re-tagging images with branch-latest tags..."
+      for IMAGE in slurmctld slurmd slurmdbd slurmrestd sackd login slurmd-pyxis login-pyxis; do
+        echo "Tagging ${IMAGE}:${IMAGE_TAG_BRANCH}"
+        docker buildx imagetools create \
+          -t ${CI_REGISTRY_IMAGE}/${IMAGE}:${IMAGE_TAG_BRANCH} \
+          ${CI_REGISTRY_IMAGE}/${IMAGE}:${IMAGE_TAG_UNIQUE}
+      done
+
+    - echo "Build complete! Images pushed to ${CI_REGISTRY_IMAGE}"
+
+  tags:
+    - docker
+
+  timeout: 2h
+
+# Publish job - re-tag main branch builds with production "latest" tags
+publish_images:
+  stage: publish
+  script:
+    - |
+      echo "Publishing production tags for main branch..."
+      for IMAGE in slurmctld slurmd slurmdbd slurmrestd sackd login slurmd-pyxis login-pyxis; do
+        echo "Creating production tag: ${IMAGE}:${IMAGE_TAG_LATEST}"
+        docker buildx imagetools create \
+          -t ${CI_REGISTRY_IMAGE}/${IMAGE}:${IMAGE_TAG_LATEST} \
+          ${CI_REGISTRY_IMAGE}/${IMAGE}:${IMAGE_TAG_BRANCH}
+      done
+
+    - echo "Production tags published successfully!"
+
+  rules:
+    # Only run on the default branch (main/master)
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+
+  needs:
+    - build_images
+
+  tags:
+    - docker
