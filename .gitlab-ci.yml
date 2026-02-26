@@ -60,6 +60,20 @@ build_images:
         export CACHE_FROM=""
       fi
 
+    # Build hpcx_base image first (required for Ubuntu 24.04 builds)
+    - |
+      if [ "${LINUX_FLAVOR}" = "ubuntu24.04" ]; then
+        echo "Building hpcx_base image (required for Ubuntu 24.04)..."
+        docker buildx bake \
+          --file ./docker-bake.hcl \
+          --file ./${SLURM_VERSION}/${LINUX_FLAVOR}/slurm.hcl \
+          --set "*.platform=linux/amd64" \
+          --set "*.output=type=registry" \
+          --set "*.args.REGISTRY=${CI_REGISTRY_IMAGE}" \
+          hpcx_base
+        echo "hpcx_base image built successfully as ${CI_REGISTRY_IMAGE}/hpcx-base:cuda12.8.1-ubuntu24.04"
+      fi
+
     # Build all images using docker bake
     - |
       echo "Building images with docker bake..."
@@ -84,6 +98,15 @@ build_images:
           ${CI_REGISTRY_IMAGE}/${IMAGE}:${IMAGE_TAG_UNIQUE}
       done
 
+    # Re-tag hpcx-base with branch-latest tag (Ubuntu 24.04 only)
+    - |
+      if [ "${LINUX_FLAVOR}" = "ubuntu24.04" ]; then
+        echo "Tagging hpcx-base with branch tag"
+        docker buildx imagetools create \
+          -t ${CI_REGISTRY_IMAGE}/hpcx-base:cuda12.8.1-${LINUX_FLAVOR}-${CI_COMMIT_REF_SLUG}-latest \
+          ${CI_REGISTRY_IMAGE}/hpcx-base:cuda12.8.1-${LINUX_FLAVOR}
+      fi
+
     - echo "Build complete! Images pushed to ${CI_REGISTRY_IMAGE}"
 
   tags:
@@ -103,6 +126,15 @@ publish_images:
           -t ${CI_REGISTRY_IMAGE}/${IMAGE}:${IMAGE_TAG_LATEST} \
           ${CI_REGISTRY_IMAGE}/${IMAGE}:${IMAGE_TAG_BRANCH}
       done
+
+    # Publish hpcx-base production tag (Ubuntu 24.04 only)
+    - |
+      if [ "${LINUX_FLAVOR}" = "ubuntu24.04" ]; then
+        echo "Creating production tag for hpcx-base"
+        docker buildx imagetools create \
+          -t ${CI_REGISTRY_IMAGE}/hpcx-base:cuda12.8.1-${LINUX_FLAVOR}-latest \
+          ${CI_REGISTRY_IMAGE}/hpcx-base:cuda12.8.1-${LINUX_FLAVOR}-${CI_COMMIT_REF_SLUG}-latest
+      fi
 
     - echo "Production tags published successfully!"
 
