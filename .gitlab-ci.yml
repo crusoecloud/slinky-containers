@@ -63,6 +63,9 @@ build_images:
     # Setup buildx builder
     - docker buildx create --use --name builder || docker buildx use builder
 
+    # Override bake HCL variable so output tags point to GitLab registry instead of ghcr.io default
+    - export REGISTRY=${CI_REGISTRY_IMAGE}
+
     # Check if cache exists for this branch to speed up builds
     - |
       CACHE_REF="${CI_REGISTRY_IMAGE}/slurmctld:${IMAGE_TAG_BRANCH}"
@@ -83,7 +86,6 @@ build_images:
           --file ./${SLURM_VERSION}/${LINUX_FLAVOR}/slurm.hcl \
           --set "*.platform=linux/amd64" \
           --set "*.output=type=registry" \
-          --set "*.args.REGISTRY=${CI_REGISTRY_IMAGE}" \
           hpcx_base
         echo "hpcx_base image built successfully as ${CI_REGISTRY_IMAGE}/hpcx-base:cuda12.8.1-ubuntu24.04"
       fi
@@ -98,7 +100,6 @@ build_images:
         ${CACHE_FROM} \
         --set "*.platform=linux/amd64" \
         --set "*.output=type=registry" \
-        --set "*.args.REGISTRY=${CI_REGISTRY_IMAGE}" \
         --set "*.args.SUFFIX=${IMAGE_TAG_UNIQUE}" \
         ${BUILD_GROUP}
 
