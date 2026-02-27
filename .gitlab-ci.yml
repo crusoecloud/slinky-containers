@@ -19,7 +19,7 @@ default:
   services:
     - docker:28-dind
   before_script:
-    - echo "$REG_TOKEN" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
+    - echo "$REG_TOKEN" | docker login -u "gitlab+deploy-token-12525871" --password-stdin "$CI_REGISTRY"
 
 # Global variables
 variables:
