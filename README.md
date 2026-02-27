@@ -9,6 +9,9 @@ with [Slinky] - to enable the orchestration of [Slurm] clusters using
 OCI artifacts are pushed to public registries:
 
 - [GitHub][github-registry]
+- [GitLab Container Registry][gitlab-registry] (automatic CI/CD builds)
+
+For instructions on pulling images from GitLab and using the CI/CD pipeline, see [GITLAB_CI.md](GITLAB_CI.md).
 
 ## Build Slurm Images
 
@@ -59,6 +62,7 @@ specific language governing permissions and limitations under the License.
 [build-guide]: ./docs/build.md
 [contact-schedmd]: https://www.schedmd.com/slurm-resources/contact-schedmd/
 [github-registry]: https://github.com/orgs/SlinkyProject/packages
+[gitlab-registry]: https://gitlab.com/crusoeenergy/island/external/slinky-containers/container_registry
 [kubernetes]: https://kubernetes.io/
 [oci]: https://opencontainers.org/
 [schedmd]: https://www.schedmd.com/
