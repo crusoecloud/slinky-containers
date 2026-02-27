@@ -19,7 +19,7 @@ default:
   services:
     - docker:28-dind
   before_script:
-    - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$REG_TOKEN"
+    - echo "$REG_TOKEN" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
 
 # Global variables
 variables:
