@@ -40,18 +40,18 @@ variables:
   IMAGE_TAG_LATEST: "${SLURM_VERSION}-${LINUX_FLAVOR}-latest"
 
 # Temporary smoke test — verifies registry push works before the full 30-min build
-test_registry_push:
-  stage: .pre
-  script:
-    - docker buildx create --use --name builder || docker buildx use builder
-    - |
-      printf 'FROM alpine:latest\nLABEL ci.test=true\n' | docker buildx build \
-        --platform linux/amd64 \
-        --output type=registry \
-        -t ${CI_REGISTRY_IMAGE}/registry-test:${CI_COMMIT_SHORT_SHA} \
-        -
-  tags:
-    - docker
+# test_registry_push:
+#   stage: .pre
+#   script:
+#     - docker buildx create --use --name builder || docker buildx use builder
+#     - |
+#       printf 'FROM alpine:latest\nLABEL ci.test=true\n' | docker buildx build \
+#         --platform linux/amd64 \
+#         --output type=registry \
+#         -t ${CI_REGISTRY_IMAGE}/registry-test:${CI_COMMIT_SHORT_SHA} \
+#         -
+#   tags:
+#     - docker
 
 # Build job - builds all container images
 build_images:
