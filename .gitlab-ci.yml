@@ -84,6 +84,8 @@ build_images:
         docker buildx bake \
           --file ./docker-bake.hcl \
           --file ./${SLURM_VERSION}/${LINUX_FLAVOR}/slurm.hcl \
+          --set "*.cache-to=type=inline" \
+          --cache-from "type=registry,ref=${CI_REGISTRY_IMAGE}/hpcx-base:cuda12.8.1-${LINUX_FLAVOR}" \
           --set "*.platform=linux/amd64" \
           --set "*.output=type=registry" \
           hpcx_base
