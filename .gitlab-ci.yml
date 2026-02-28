@@ -71,10 +71,8 @@ build_images:
       CACHE_REF="${CI_REGISTRY_IMAGE}/slurmctld:${IMAGE_TAG_BRANCH}"
       if docker manifest inspect ${CACHE_REF} &>/dev/null; then
         echo "Found existing cache, using it to speed up build"
-        export CACHE_FROM="--cache-from type=registry,ref=${CACHE_REF}"
       else
         echo "No cache found, building from scratch"
-        export CACHE_FROM=""
       fi
 
     # Build hpcx_base image first (required for Ubuntu 24.04 builds)
@@ -85,7 +83,7 @@ build_images:
           --file ./docker-bake.hcl \
           --file ./${SLURM_VERSION}/${LINUX_FLAVOR}/slurm.hcl \
           --set "*.cache-to=type=inline" \
-          --cache-from "type=registry,ref=${CI_REGISTRY_IMAGE}/hpcx-base:cuda12.8.1-${LINUX_FLAVOR}" \
+          --set "*.cache-from=type=registry,ref=${CI_REGISTRY_IMAGE}/hpcx-base:cuda12.8.1-${LINUX_FLAVOR}" \
           --set "*.platform=linux/amd64" \
           --set "*.output=type=registry" \
           hpcx_base
@@ -99,7 +97,14 @@ build_images:
         --file ./docker-bake.hcl \
         --file ./${SLURM_VERSION}/${LINUX_FLAVOR}/slurm.hcl \
         --set "*.cache-to=type=inline" \
-        ${CACHE_FROM} \
+        --set "slurmctld.cache-from=type=registry,ref=${CI_REGISTRY_IMAGE}/slurmctld:${IMAGE_TAG_BRANCH}" \
+        --set "slurmd.cache-from=type=registry,ref=${CI_REGISTRY_IMAGE}/slurmd:${IMAGE_TAG_BRANCH}" \
+        --set "slurmdbd.cache-from=type=registry,ref=${CI_REGISTRY_IMAGE}/slurmdbd:${IMAGE_TAG_BRANCH}" \
+        --set "slurmrestd.cache-from=type=registry,ref=${CI_REGISTRY_IMAGE}/slurmrestd:${IMAGE_TAG_BRANCH}" \
+        --set "sackd.cache-from=type=registry,ref=${CI_REGISTRY_IMAGE}/sackd:${IMAGE_TAG_BRANCH}" \
+        --set "login.cache-from=type=registry,ref=${CI_REGISTRY_IMAGE}/login:${IMAGE_TAG_BRANCH}" \
+        --set "slurmd_pyxis.cache-from=type=registry,ref=${CI_REGISTRY_IMAGE}/slurmd-pyxis:${IMAGE_TAG_BRANCH}" \
+        --set "login_pyxis.cache-from=type=registry,ref=${CI_REGISTRY_IMAGE}/login-pyxis:${IMAGE_TAG_BRANCH}" \
         --set "*.platform=linux/amd64" \
         --set "*.output=type=registry" \
         --set "*.args.SUFFIX=${IMAGE_TAG_UNIQUE}" \
