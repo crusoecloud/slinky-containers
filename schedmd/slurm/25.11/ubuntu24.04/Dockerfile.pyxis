@@ -21,23 +21,26 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
 set -xeuo pipefail
 apt-get -qq update
 apt-get -qq -y install --no-install-recommends \
-  ca-certificates wget jq tar
+  ca-certificates curl jq tar
 # Determine Latest Versions
-ENROOT_VERSION="$(wget -qO - https://api.github.com/repos/NVIDIA/enroot/releases/latest | jq -r '.tag_name')"
+ENROOT_VERSION="$(curl -fsSL https://api.github.com/repos/NVIDIA/enroot/releases/latest | jq -r '.tag_name')"
 ENROOT_VERSION="${ENROOT_VERSION/#v}"
-PYXIS_VERSION="$(wget -qO - https://api.github.com/repos/NVIDIA/pyxis/releases/latest | jq -r '.tag_name')"
+PYXIS_VERSION="$(curl -fsSL https://api.github.com/repos/NVIDIA/pyxis/releases/latest | jq -r '.tag_name')"
 PYXIS_VERSION="${PYXIS_VERSION/#v}"
 # Download
-wget -N https://github.com/NVIDIA/enroot/releases/download/v${ENROOT_VERSION}/enroot_${ENROOT_VERSION}-1_${TARGETARCH}.deb
-wget -N https://github.com/NVIDIA/enroot/releases/download/v${ENROOT_VERSION}/enroot+caps_${ENROOT_VERSION}-1_${TARGETARCH}.deb
-wget -N -O /usr/share/bash-completion/completions/enroot https://raw.githubusercontent.com/NVIDIA/enroot/refs/tags/v${ENROOT_VERSION}/conf/bash_completion
-wget -N -P /etc/enroot/hooks.d/ \
-  https://raw.githubusercontent.com/NVIDIA/enroot/refs/tags/v${ENROOT_VERSION}/conf/hooks/extra/50-mig-config.sh \
-  https://raw.githubusercontent.com/NVIDIA/enroot/refs/tags/v${ENROOT_VERSION}/conf/hooks/extra/50-sharp.sh \
-  https://raw.githubusercontent.com/NVIDIA/enroot/refs/tags/v${ENROOT_VERSION}/conf/hooks/extra/50-slurm-pmi.sh \
+curl -fsSLO https://github.com/NVIDIA/enroot/releases/download/v${ENROOT_VERSION}/enroot_${ENROOT_VERSION}-1_${TARGETARCH}.deb
+curl -fsSLO https://github.com/NVIDIA/enroot/releases/download/v${ENROOT_VERSION}/enroot+caps_${ENROOT_VERSION}-1_${TARGETARCH}.deb
+curl -fsSL -o /usr/share/bash-completion/completions/enroot https://raw.githubusercontent.com/NVIDIA/enroot/refs/tags/v${ENROOT_VERSION}/conf/bash_completion
+curl -fsSL -o /etc/enroot/hooks.d/50-mig-config.sh \
+  https://raw.githubusercontent.com/NVIDIA/enroot/refs/tags/v${ENROOT_VERSION}/conf/hooks/extra/50-mig-config.sh
+curl -fsSL -o /etc/enroot/hooks.d/50-sharp.sh \
+  https://raw.githubusercontent.com/NVIDIA/enroot/refs/tags/v${ENROOT_VERSION}/conf/hooks/extra/50-sharp.sh
+curl -fsSL -o /etc/enroot/hooks.d/50-slurm-pmi.sh \
+  https://raw.githubusercontent.com/NVIDIA/enroot/refs/tags/v${ENROOT_VERSION}/conf/hooks/extra/50-slurm-pmi.sh
+curl -fsSL -o /etc/enroot/hooks.d/50-slurm-pytorch.sh \
   https://raw.githubusercontent.com/NVIDIA/enroot/refs/tags/v${ENROOT_VERSION}/conf/hooks/extra/50-slurm-pytorch.sh
 chmod 755 -R /etc/enroot/hooks.d/
-wget -N -O pyxis.tar.gz https://github.com/NVIDIA/pyxis/archive/refs/tags/v${PYXIS_VERSION}.tar.gz
+curl -fsSL -o pyxis.tar.gz https://github.com/NVIDIA/pyxis/archive/refs/tags/v${PYXIS_VERSION}.tar.gz
 mkdir pyxis
 tar -zxvf pyxis.tar.gz -C pyxis --strip-components=1
 EOR
