@@ -27,6 +27,7 @@ variables:
   DOCKER_DRIVER: overlay2
   DOCKER_BUILDKIT: "1"
   BUILDX_EXPERIMENTAL: "1"
+  BUILDKIT_CONFIG: "/etc/buildkit/buildkitd.toml"
 
   # Build configuration (can be overridden via GitLab CI/CD settings)
   SLURM_VERSION: "25.11"
