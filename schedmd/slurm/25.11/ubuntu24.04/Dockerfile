@@ -41,7 +41,7 @@ ARG SLURM_VERSION
 ENV SLURM_VERSION=${SLURM_VERSION}
 ARG SLURM_DIR
 
-ARG GH_CLI_VERSION=2.86.0
+ARG GH_CLI_VERSION=2.87.0
 ARG UV_VERSION=0.10.1
 
 USER root
@@ -134,12 +134,28 @@ RUN mkdir -p /tmp/uv-download \
   && cd /tmp \
   && rm -rf /tmp/uv-download
 
-# Setup nsscache symlinks. We have to do this because /etc is mounted for
-# slurm configuration and individual mounting of files don't support auto
-# refresh
-RUN mkdir -p /var/lib/nsscache && \
-    ln -sf /var/lib/nsscache/passwd.cache /etc/passwd.cache && \
-    ln -sf /var/lib/nsscache/group.cache /etc/group.cache
+# Setup symlinks into /var/lib so that live updates work without remounting.
+# /etc is bind-mounted wholesale for Slurm config; subPath mounts aren't used
+# because kubelet won't refresh them on the fly.
+RUN <<EOR
+set -xeuo pipefail
+mkdir -p /var/lib/nsscache /var/lib/system-config /var/lib/ssh-keys /etc/ssh/sshd_config.d
+# Seed /var/lib/system-config with system defaults so symlinks are never
+# dangling at build time — PAM must remain functional for subsequent package installs.
+cp /etc/nsswitch.conf /var/lib/system-config/nsswitch.conf
+for f in common-account common-auth common-session; do
+  cp /etc/pam.d/$f /var/lib/system-config/$f
+done
+# nsscache cache files
+ln -sf /var/lib/nsscache/passwd.cache /etc/passwd.cache
+ln -sf /var/lib/nsscache/group.cache /etc/group.cache
+# system-config overrides (operator replaces these via ConfigMap at runtime)
+ln -sf /var/lib/system-config/nsswitch.conf /etc/nsswitch.conf
+ln -sf /var/lib/system-config/50-nsscache.conf /etc/ssh/sshd_config.d/50-nsscache.conf
+for f in common-account common-auth common-session; do
+  ln -sf /var/lib/system-config/$f /etc/pam.d/$f
+done
+EOR
 
 ################################################################################
 FROM base AS slurmctld
@@ -177,14 +193,9 @@ set -xeuo pipefail
 apt-get -qq update
 apt-get -qq -y install --no-install-recommends --fix-broken \
   gawk socat \
-  openssh-server \
-  authselect sssd sssd-ad sssd-ldap libpam-sss libnss-sss
+  openssh-server
 # Configure
 mkdir -p /var/spool/slurmd/
-sed -i -E "s/^passwd:[[:space:]]+/&slurm /g" /etc/nsswitch.conf
-sed -i -E "s/^group:[[:space:]]+/&slurm /g" /etc/nsswitch.conf
-mkdir -p /etc/authselect
-authselect select sssd with-mkhomedir --force
 rm -f /etc/ssh/ssh_host_*
 EOR
 
@@ -193,7 +204,6 @@ COPY \
   files/etc/supervisor/conf.d/fakesystemd.conf \
   files/etc/supervisor/conf.d/slurmd.conf \
   files/etc/supervisor/conf.d/sshd.conf \
-  files/etc/supervisor/conf.d/sssd.conf \
   /etc/supervisor/conf.d/
 COPY files/usr/local/bin/fakesystemd.sh /usr/local/bin/
 COPY files/usr/local/bin/slurmd-entrypoint.sh /usr/local/bin/entrypoint.sh
@@ -295,11 +305,8 @@ apt-get -qq update
 apt-get -qq -y install --no-install-recommends \
   socat \
   openssh-server \
-  authselect sssd sssd-ad sssd-ldap libpam-sss libnss-sss \
   sudo
 # Configure
-mkdir -p /etc/authselect
-authselect select sssd with-mkhomedir --force
 rm -f /etc/ssh/ssh_host_*
 EOR
 
@@ -308,7 +315,6 @@ COPY \
   files/etc/supervisor/conf.d/fakesystemd-slurm.conf \
   files/etc/supervisor/conf.d/sackd.conf \
   files/etc/supervisor/conf.d/sshd.conf \
-  files/etc/supervisor/conf.d/sssd.conf \
   /etc/supervisor/conf.d/
 COPY files/usr/local/bin/fakesystemd.sh /usr/local/bin/
 COPY files/usr/local/bin/login-entrypoint.sh /usr/local/bin/entrypoint.sh
