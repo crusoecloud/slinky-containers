@@ -61,7 +61,8 @@ build_images:
     - cd ${BUILD_CONTEXT}
 
     # Setup buildx builder
-    - docker buildx create --use --name builder || docker buildx use builder
+    # - docker buildx create --use --name builder || docker buildx use builder
+    - docker buildx create --name mybuilder --use --buildkitd-config $BUILDKIT_CONFIG
 
     # Override bake HCL variable so output tags point to GitLab registry instead of ghcr.io default
     - export REGISTRY=${CI_REGISTRY_IMAGE}
