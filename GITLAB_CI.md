@@ -185,41 +185,6 @@ chmod +x pull-slinky-images.sh
 ./pull-slinky-images.sh 25.11-ubuntu24.04-dev-ci-pipeline-latest  # Pull from specific branch
 ```
 
-### Using Images in Docker Compose
-
-```yaml
-version: '3.8'
-
-services:
-  slurmctld:
-    image: registry.gitlab.com/crusoeenergy/island/external/slinky-containers/slurmctld:25.11-ubuntu24.04-latest
-    container_name: slurmctld
-    hostname: slurmctld
-    networks:
-      - slurm-network
-    # ... rest of configuration
-
-  slurmd:
-    image: registry.gitlab.com/crusoeenergy/island/external/slinky-containers/slurmd-pyxis:25.11-ubuntu24.04-latest
-    container_name: slurmd
-    hostname: slurmd
-    networks:
-      - slurm-network
-    # ... rest of configuration
-
-  slurmdbd:
-    image: registry.gitlab.com/crusoeenergy/island/external/slinky-containers/slurmdbd:25.11-ubuntu24.04-latest
-    container_name: slurmdbd
-    hostname: slurmdbd
-    networks:
-      - slurm-network
-    # ... rest of configuration
-
-networks:
-  slurm-network:
-    driver: bridge
-```
-
 ### Using Images in Kubernetes
 
 1. **Create image pull secret:**
