@@ -114,14 +114,20 @@ curl -fsSL -o /tmp/git-lfs-deb.sh https://packagecloud.io/install/repositories/g
   && bash /tmp/git-lfs-deb.sh \
   && apt-get -qq -y install --no-install-recommends git-lfs \
   && rm /tmp/git-lfs-deb.sh
-# Install github cli
-mkdir -p -m 755 /etc/apt/keyrings \
-  && curl -fsSL -o /etc/apt/keyrings/githubcli-archive-keyring.gpg https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-  && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
-  && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
-  && apt-get -qq update \
-  && apt-get -qq -y install --no-install-recommends \
-  gh=${GH_CLI_VERSION}
+# Install github cli - download deb directly from GitHub releases
+# (cli.github.com was unreachable from CI runner, so using github.com releases instead)
+# Previous method using apt repo (cli.github.com times out):
+# mkdir -p -m 755 /etc/apt/keyrings \
+#   && curl -fsSL -o /etc/apt/keyrings/githubcli-archive-keyring.gpg https://cli.github.com/packages/githubcli-archive-keyring.gpg \
+#   && chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg \
+#   && echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" > /etc/apt/sources.list.d/github-cli.list \
+#   && apt-get -qq update \
+#   && apt-get -qq -y install --no-install-recommends \
+#   gh=${GH_CLI_VERSION}
+
+curl -fsSL -o /tmp/gh.deb "https://github.com/cli/cli/releases/download/v${GH_CLI_VERSION}/gh_${GH_CLI_VERSION}_linux_amd64.deb" \
+  && dpkg -i /tmp/gh.deb \
+  && rm /tmp/gh.deb
 EOR
 
 # Install uv package manager
