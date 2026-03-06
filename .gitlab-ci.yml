@@ -17,7 +17,8 @@ stages:
 default:
   image: docker:28-cli
   services:
-    - docker:28-dind
+    - name: docker:28-dind
+      command: ["--mtu=1460"]
   before_script:
     - echo "$REG_TOKEN" | docker login -u "gitlab+deploy-token-12525871" --password-stdin "$CI_REGISTRY"
 
