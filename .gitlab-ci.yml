@@ -179,7 +179,7 @@ publish_ghcr:
   variables:
     GHCR_REGISTRY: "ghcr.io/crusoecloud/cmk/slurm-containers"
   before_script:
-    - echo "$Package_Pusher" | docker login -u "gitlab+deploy-token-12525871" --password-stdin "$CI_REGISTRY"
+    - echo "$REG_TOKEN" | docker login -u "gitlab+deploy-token-12525871" --password-stdin "$CI_REGISTRY"
     - echo "$Package_Pusher" | docker login ghcr.io -u crusoecloud --password-stdin
     - apk add --no-cache jq curl
   script:
