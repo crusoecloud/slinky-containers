@@ -32,9 +32,17 @@ variables:
 
   # Build configuration (can be overridden via GitLab CI/CD settings)
   SLURM_VERSION: "25.11"
+  SLURM_VERSION_FULL: "25.11.2"
   LINUX_FLAVOR: "ubuntu24.04"
   BUILD_GROUP: "all"  # Options: core, all, extras
   BUILD_CONTEXT: "./schedmd/slurm"
+
+  # Bake configuration
+  BAKE_FILES: "--file ./docker-bake.hcl --file ./${SLURM_VERSION}/${LINUX_FLAVOR}/slurm.hcl"
+
+  # Image lists
+  CORE_IMAGES: "slurmctld slurmd slurmdbd slurmrestd sackd login slurmd-pyxis login-pyxis"
+  GHCR_IMAGES: "slurmctld slurmd login slurmd-pyxis login-pyxis"
 
   # Image tagging strategy
   IMAGE_TAG_UNIQUE: "${SLURM_VERSION}-${LINUX_FLAVOR}-${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}"
@@ -44,6 +52,10 @@ variables:
 # Build job - builds all container images
 build_images:
   stage: build
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: never
+    - when: always
   script:
     # Navigate to build context
     - cd ${BUILD_CONTEXT}
@@ -69,14 +81,13 @@ build_images:
       if [ "${LINUX_FLAVOR}" = "ubuntu24.04" ]; then
         echo "Building hpcx_base image (required for Ubuntu 24.04)..."
         docker buildx bake \
-          --file ./docker-bake.hcl \
-          --file ./${SLURM_VERSION}/${LINUX_FLAVOR}/slurm.hcl \
+          ${BAKE_FILES} \
           --set "*.cache-to=type=inline" \
           --set "*.cache-from=type=registry,ref=${CI_REGISTRY_IMAGE}/hpcx-base:cuda12.8.1-${LINUX_FLAVOR}" \
           --set "*.platform=linux/amd64" \
           --set "*.output=type=registry" \
           hpcx_base
-        echo "hpcx_base image built successfully as ${CI_REGISTRY_IMAGE}/hpcx-base:cuda12.8.1-ubuntu24.04"
+        echo "hpcx_base image built successfully as ${CI_REGISTRY_IMAGE}/hpcx-base:cuda12.8.1-${LINUX_FLAVOR}"
       fi
 
     # Set suffix for commit specific tag
@@ -86,8 +97,7 @@ build_images:
     - |
       echo "Building images with docker bake..."
       docker buildx bake \
-        --file ./docker-bake.hcl \
-        --file ./${SLURM_VERSION}/${LINUX_FLAVOR}/slurm.hcl \
+        ${BAKE_FILES} \
         --set "*.cache-to=type=inline" \
         --set "slurmctld.cache-from=type=registry,ref=${CI_REGISTRY_IMAGE}/slurmctld:${IMAGE_TAG_BRANCH}" \
         --set "slurmd.cache-from=type=registry,ref=${CI_REGISTRY_IMAGE}/slurmd:${IMAGE_TAG_BRANCH}" \
@@ -104,7 +114,7 @@ build_images:
     # Re-tag images with branch-latest tags for easier reference
     - |
       echo "Re-tagging images with branch-latest tags..."
-      for IMAGE in slurmctld slurmd slurmdbd slurmrestd sackd login slurmd-pyxis login-pyxis; do
+      for IMAGE in ${CORE_IMAGES}; do
         echo "Tagging ${IMAGE}:${IMAGE_TAG_BRANCH}"
         docker buildx imagetools create \
           -t ${CI_REGISTRY_IMAGE}/${IMAGE}:${IMAGE_TAG_BRANCH} \
@@ -133,7 +143,7 @@ publish_images:
   script:
     - |
       echo "Publishing production tags for main branch..."
-      for IMAGE in slurmctld slurmd slurmdbd slurmrestd sackd login slurmd-pyxis login-pyxis; do
+      for IMAGE in ${CORE_IMAGES}; do
         echo "Creating production tag: ${IMAGE}:${IMAGE_TAG_LATEST}"
         docker buildx imagetools create \
           -t ${CI_REGISTRY_IMAGE}/${IMAGE}:${IMAGE_TAG_LATEST} \
@@ -152,11 +162,75 @@ publish_images:
     - echo "Production tags published successfully!"
 
   rules:
-    # Only run on the default branch (main/master)
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: never
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
 
   needs:
     - build_images
+
+  tags:
+    - docker
+
+# Publish to GitHub Container Registry (ghcr.io/crusoecloud)
+# Copies images from GitLab registry to ghcr.io with auto-incrementing cmk.N tags
+publish_ghcr:
+  stage: publish
+  variables:
+    GHCR_REGISTRY: "ghcr.io/crusoecloud/cmk/slurm-containers"
+  before_script:
+    - echo "$REG_TOKEN" | docker login -u "gitlab+deploy-token-12525871" --password-stdin "$CI_REGISTRY"
+    - echo "$Package_Pusher" | docker login ghcr.io -u crusoecloud --password-stdin
+    - apk add --no-cache jq curl
+  script:
+    # Determine next cmk.N version
+    - |
+      REF_REPO="crusoecloud/cmk/slurm-containers/slurmd"
+      TOKEN=$(curl -sf -u "_:${Package_Pusher}" \
+        "https://ghcr.io/token?scope=repository:${REF_REPO}:pull" \
+        | jq -r '.token') || true
+
+      # Find the highest existing cmk.N for this slurm version
+      MAX_N=""
+      if [ -n "${TOKEN}" ] && [ "${TOKEN}" != "null" ]; then
+        TAGS_JSON=$(curl -sf -H "Authorization: Bearer ${TOKEN}" \
+          "https://ghcr.io/v2/${REF_REPO}/tags/list") || true
+        if [ -n "${TAGS_JSON}" ] && ! echo "${TAGS_JSON}" | jq -e '.errors' &>/dev/null; then
+          MAX_N=$(echo "${TAGS_JSON}" | jq -r '.tags[]' \
+            | sed -n "s/^${SLURM_VERSION_FULL}-${LINUX_FLAVOR}-cmk\.\([0-9][0-9]*\)$/\1/p" \
+            | sort -n | tail -1)
+        fi
+      fi
+
+      # Set next version
+      if [ -z "${MAX_N}" ]; then
+        CMK_TAG="cmk.1"
+        echo "No existing cmk tags found. Starting at ${CMK_TAG}"
+      else
+        CMK_TAG="cmk.$((MAX_N + 1))"
+        echo "Latest: cmk.${MAX_N} -> next: ${CMK_TAG}"
+      fi
+
+      FULL_TAG="${SLURM_VERSION_FULL}-${LINUX_FLAVOR}-${CMK_TAG}"
+      echo "Will publish as: ${FULL_TAG}"
+
+    # Copy each image from GitLab registry to ghcr.io
+    - |
+      for IMAGE in ${GHCR_IMAGES}; do
+        echo "  ${IMAGE}:${FULL_TAG}"
+        docker buildx imagetools create \
+          -t "${GHCR_REGISTRY}/${IMAGE}:${FULL_TAG}" \
+          "${CI_REGISTRY_IMAGE}/${IMAGE}:${IMAGE_TAG_LATEST}"
+      done
+
+    - echo "Published 5 images to ghcr.io with tag ${SLURM_VERSION_FULL}-${LINUX_FLAVOR}-${CMK_TAG}"
+
+  # Ensure only one publish_ghcr job runs at a time
+  resource_group: publish-ghcr
+
+  rules:
+    # Only runs via "Run Pipeline" on main (CI/CD > Pipelines > Run Pipeline)
+    - if: '$CI_PIPELINE_SOURCE == "web" && $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
 
   tags:
     - docker
