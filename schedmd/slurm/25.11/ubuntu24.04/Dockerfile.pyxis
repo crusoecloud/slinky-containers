@@ -72,7 +72,9 @@ make install
 # Configure
 mkdir -m 777 -p /usr/share/enroot/enroot-data/
 mkdir -m 755 -p /run/enroot/
+mkdir -m 755 -p /var/lib/slurm-plugstack
 mkdir -m 644 -p /etc/slurm/plugstack.conf.d/
+ln -sf /var/lib/slurm-plugstack/plugstack.conf /etc/slurm/plugstack.conf
 ln -s /usr/share/pyxis/pyxis.conf /etc/slurm/plugstack.conf.d/pyxis.conf
 # Fix NVIDIA proc mount for GPUs
 sed -i '2i mount -t proc none /proc 2>/dev/null || true' /usr/local/bin/entrypoint.sh
@@ -125,7 +127,9 @@ make install
 # Configure
 mkdir -m 777 -p /usr/share/enroot/enroot-data/
 mkdir -m 755 -p /run/enroot/
+mkdir -m 755 -p /var/lib/slurm-plugstack
 mkdir -m 644 -p /etc/slurm/plugstack.conf.d/
+ln -sf /var/lib/slurm-plugstack/plugstack.conf /etc/slurm/plugstack.conf
 ln -s /usr/share/pyxis/pyxis.conf /etc/slurm/plugstack.conf.d/pyxis.conf
 # Fix NVIDIA proc mount for GPUs
 sed -i '2i mount -t proc none /proc 2>/dev/null || true' /usr/local/bin/entrypoint.sh
