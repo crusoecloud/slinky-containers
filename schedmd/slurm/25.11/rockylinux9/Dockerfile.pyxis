@@ -96,6 +96,7 @@ ln -s /usr/share/pyxis/pyxis.conf /etc/slurm/plugstack.conf.d/pyxis.conf
 # Fix NVIDIA proc mount for GPUs
 sed -i '2i mount -t proc none /proc 2>/dev/null || true' /usr/local/bin/entrypoint.sh
 sed -i '2i mount -t tmpfs tmpfs /tmp 2>/dev/null || true' /usr/local/bin/entrypoint.sh
+chmod 755 /usr/local/bin/entrypoint.sh
 EOR
 
 ADD https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo /etc/yum.repos.d/nvidia-container-toolkit.repo
@@ -143,6 +144,7 @@ ln -s /usr/share/pyxis/pyxis.conf /etc/slurm/plugstack.conf.d/pyxis.conf
 # Fix NVIDIA proc mount for GPUs
 sed -i '2i mount -t proc none /proc 2>/dev/null || true' /usr/local/bin/entrypoint.sh
 sed -i '2i mount -t tmpfs tmpfs /tmp 2>/dev/null || true' /usr/local/bin/entrypoint.sh
+chmod 755 /usr/local/bin/entrypoint.sh
 EOR
 
 ADD https://nvidia.github.io/libnvidia-container/stable/rpm/nvidia-container-toolkit.repo /etc/yum.repos.d/nvidia-container-toolkit.repo

@@ -178,6 +178,7 @@ COPY \
   files/etc/supervisor/conf.d/slurmctld.conf \
   /etc/supervisor/conf.d/
 COPY files/usr/local/bin/slurmctld-entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod 755 /usr/local/bin/entrypoint.sh
 
 EXPOSE 6817/tcp
 ENTRYPOINT ["entrypoint.sh"]
@@ -213,6 +214,7 @@ COPY \
   /etc/supervisor/conf.d/
 COPY files/usr/local/bin/fakesystemd.sh /usr/local/bin/
 COPY files/usr/local/bin/slurmd-entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod 755 /usr/local/bin/entrypoint.sh
 
 EXPOSE 6818/tcp 22/tcp
 ENTRYPOINT ["entrypoint.sh"]
@@ -324,6 +326,7 @@ COPY \
   /etc/supervisor/conf.d/
 COPY files/usr/local/bin/fakesystemd.sh /usr/local/bin/
 COPY files/usr/local/bin/login-entrypoint.sh /usr/local/bin/entrypoint.sh
+RUN chmod 755 /usr/local/bin/entrypoint.sh
 
 EXPOSE 22/tcp
 ENTRYPOINT ["entrypoint.sh"]
