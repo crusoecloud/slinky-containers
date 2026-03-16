@@ -49,7 +49,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 COPY --from=download /tmp/*.deb ./
 COPY --from=download /etc/enroot/hooks.d/* /etc/enroot/hooks.d/
-COPY files/etc/enroot/hooks.d/* /etc/enroot/hooks.d/
+COPY --from=buildctx files/etc/enroot/hooks.d/* /etc/enroot/hooks.d/
 COPY --from=download /usr/share/bash-completion/completions/* /usr/share/bash-completion/completions/
 
 COPY --from=download /tmp/pyxis /tmp/pyxis
@@ -110,7 +110,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 COPY --from=download /tmp/*.deb ./
 COPY --from=download /etc/enroot/hooks.d/* /etc/enroot/hooks.d/
-COPY files/etc/enroot/hooks.d/* /etc/enroot/hooks.d/
+COPY --from=buildctx files/etc/enroot/hooks.d/* /etc/enroot/hooks.d/
 COPY --from=download /usr/share/bash-completion/completions/* /usr/share/bash-completion/completions/
 
 COPY --from=download /tmp/pyxis /tmp/pyxis
