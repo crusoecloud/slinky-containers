@@ -265,6 +265,7 @@ target "slurmd_pyxis" {
     format_tag(REGISTRY, "slurmd-pyxis", slurm_version, linux_flavor, SUFFIX),
   ]
   contexts = {
+    "buildctx" = "cwd://${context}"
     format_tag(REGISTRY, "slurmd", slurm_version(slurm_version), linux_flavor, SUFFIX) = "target:slurmd"
     format_tag(REGISTRY, "slurmd", slurm_version, linux_flavor, SUFFIX) = "target:slurmd"
   }
@@ -278,6 +279,7 @@ target "login_pyxis" {
     format_tag(REGISTRY, "login-pyxis", slurm_version, linux_flavor, SUFFIX),
   ]
   contexts = {
+    "buildctx" = "cwd://${context}"
     format_tag(REGISTRY, "slurmd", slurm_version(slurm_version), linux_flavor, SUFFIX) = "target:slurmd"
     format_tag(REGISTRY, "slurmd", slurm_version, linux_flavor, SUFFIX) = "target:slurmd"
     format_tag(REGISTRY, "login", slurm_version(slurm_version), linux_flavor, SUFFIX) = "target:login"
