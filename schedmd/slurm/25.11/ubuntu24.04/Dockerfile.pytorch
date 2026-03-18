@@ -39,32 +39,33 @@ RUN apt-get -qq update && \
     rm -rf /var/lib/apt/lists/*
 
 
-FROM builder-base AS libnccl2
-# NCCL
-ARG CUDA_VERSION=12.8.1
-ARG TARGET_NCCL_VERSION='2.28.7-1'
-ARG CUDA_ARCH_LIST='80 89 90 100 120'
-# Converts CUDA_ARCH_LIST to '-gencode=arch=compute_XX,code=sm_XX -gencode=...' format with PTX for the last listed arch
-RUN case "${CUDA_VERSION}" in 12.[0-7].*) \
-      CUDA_ARCH_LIST="${CUDA_ARCH_LIST% 100 120}" ;; \
-    esac && \
-    NVCC_GENCODE="$( \
-    echo "${CUDA_ARCH_LIST}" | sed -e \
-      's:\S\+:-gencode=arch=compute_\0,code=sm_\0:g; s:_[[:digit:]]\+$:\0 -gencode=arch=compute\0,code=compute\0:' \
-    )" && \
-    BUILD_THREADS="$(echo "${NVCC_GENCODE}" | wc -w)" && \
-    if [ "$(uname -m)" = "aarch64" ]; then MAKE_JOBS=4; else MAKE_JOBS=20; fi && \
-    mkdir /tmp/build && \
-    cd /tmp/build && \
-    wget -qO- "https://github.com/NVIDIA/nccl/archive/refs/tags/v${TARGET_NCCL_VERSION}.tar.gz" \
-    | tar --strip-components=1 -xzf - && \
-    NVCC_APPEND_FLAGS="--threads=${BUILD_THREADS}" \
-      make -j${MAKE_JOBS} pkg.debian.build NVCC_GENCODE="${NVCC_GENCODE}" && \
-    cd build/pkg/deb && \
-    mkdir /tmp/libnccl2 && \
-    mv ./libnccl*.deb /tmp/libnccl2/ && \
-    cd /tmp && \
-    rm -r /tmp/build
+# # Removing NCCL installation to use pytorch NCCL
+# FROM builder-base AS libnccl2
+# # NCCL
+# ARG CUDA_VERSION=12.8.1
+# ARG TARGET_NCCL_VERSION='2.28.7-1'
+# ARG CUDA_ARCH_LIST='80 89 90 100 120'
+# # Converts CUDA_ARCH_LIST to '-gencode=arch=compute_XX,code=sm_XX -gencode=...' format with PTX for the last listed arch
+# RUN case "${CUDA_VERSION}" in 12.[0-7].*) \
+#       CUDA_ARCH_LIST="${CUDA_ARCH_LIST% 100 120}" ;; \
+#     esac && \
+#     NVCC_GENCODE="$( \
+#     echo "${CUDA_ARCH_LIST}" | sed -e \
+#       's:\S\+:-gencode=arch=compute_\0,code=sm_\0:g; s:_[[:digit:]]\+$:\0 -gencode=arch=compute\0,code=compute\0:' \
+#     )" && \
+#     BUILD_THREADS="$(echo "${NVCC_GENCODE}" | wc -w)" && \
+#     if [ "$(uname -m)" = "aarch64" ]; then MAKE_JOBS=4; else MAKE_JOBS=20; fi && \
+#     mkdir /tmp/build && \
+#     cd /tmp/build && \
+#     wget -qO- "https://github.com/NVIDIA/nccl/archive/refs/tags/v${TARGET_NCCL_VERSION}.tar.gz" \
+#     | tar --strip-components=1 -xzf - && \
+#     NVCC_APPEND_FLAGS="--threads=${BUILD_THREADS}" \
+#       make -j${MAKE_JOBS} pkg.debian.build NVCC_GENCODE="${NVCC_GENCODE}" && \
+#     cd build/pkg/deb && \
+#     mkdir /tmp/libnccl2 && \
+#     mv ./libnccl*.deb /tmp/libnccl2/ && \
+#     cd /tmp && \
+#     rm -r /tmp/build
 
 
 FROM builder-base AS nvbandwidth
@@ -139,8 +140,9 @@ SHELL ["/bin/sh", "-c"]
 ################################################################################
 FROM base AS final
 
-RUN --mount=type=bind,from=libnccl2,source=/tmp/libnccl2,target=/tmp/install \
-    cd /tmp/install && dpkg -i *.deb
+# # Removing NCCL installation to use pytorch NCCL
+# RUN --mount=type=bind,from=libnccl2,source=/tmp/libnccl2,target=/tmp/install \
+#     cd /tmp/install && dpkg -i *.deb
 
 COPY --link --from=nvbandwidth /tmp/nvbandwidth/ /
 COPY --link --from=rebuild-ompi /opt/hpcx/ompi /opt/hpcx/ompi
