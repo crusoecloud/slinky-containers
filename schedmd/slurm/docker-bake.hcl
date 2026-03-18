@@ -143,15 +143,28 @@ target "_login" {
   }
 }
 
-target "hpcx_base" {
+# target "hpcx_base" {
+#   context = context
+#   dockerfile = "Dockerfile.hpcx"
+#   tags = [
+#     format_tag(REGISTRY, "hpcx-base", "cuda12.8.1", linux_flavor, SUFFIX),
+#   ]
+#   labels = {
+#     "org.opencontainers.image.title" = "HPCX Base Image"
+#     "org.opencontainers.image.description" = "Custom Ubuntu 24.04 base with CUDA 12.8.1 and HPC-X"
+#     "org.opencontainers.image.vendor" = "Crusoe"
+#   }
+# }
+
+target "pytorch_base" {
   context = context
-  dockerfile = "Dockerfile.hpcx"
+  dockerfile = "Dockerfile.pytorch"
   tags = [
-    format_tag(REGISTRY, "hpcx-base", "cuda12.8.1", linux_flavor, SUFFIX),
+    format_tag(REGISTRY, "pytorch-base", "pytorch25.03", linux_flavor, SUFFIX),
   ]
   labels = {
-    "org.opencontainers.image.title" = "HPCX Base Image"
-    "org.opencontainers.image.description" = "Custom Ubuntu 24.04 base with CUDA 12.8.1 and HPC-X"
+    "org.opencontainers.image.title" = "PyTorch Base Image"
+    "org.opencontainers.image.description" = "NGC PyTorch 25.03 base with Slurm-aware OpenMPI and NCCL 2.25.1"
     "org.opencontainers.image.vendor" = "Crusoe"
   }
 }

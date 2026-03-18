@@ -7,7 +7,8 @@
 ARG SLURM_VERSION=25.11-latest
 ARG SLURM_DIR=slurm
 ARG REGISTRY
-ARG PARENT_IMAGE=${REGISTRY}/hpcx-base:cuda12.8.1-ubuntu24.04
+# ARG PARENT_IMAGE=${REGISTRY}/hpcx-base:cuda12.8.1-ubuntu24.04
+ARG PARENT_IMAGE=${REGISTRY}/pytorch-base:pytorch25.03-ubuntu24.04
 
 ################################################################################
 FROM alpine:latest AS slurm-src

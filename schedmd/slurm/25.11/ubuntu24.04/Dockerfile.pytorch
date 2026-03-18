@@ -1,0 +1,227 @@
+# syntax=docker/dockerfile:1
+# SPDX-FileCopyrightText: Copyright (C) Crusoe.
+# SPDX-License-Identifier: Apache-2.0
+
+################################################################################
+
+ARG BASE_IMAGE=nvcr.io/nvidia/pytorch:25.03-py3
+
+################################################################################
+FROM ${BASE_IMAGE} AS base
+
+ARG DEBIAN_FRONTEND=noninteractive
+
+# Mellanox OFED (latest) - for up-to-date IB packages on Ubuntu 24.04
+RUN wget -qO - https://www.mellanox.com/downloads/ofed/RPM-GPG-KEY-Mellanox | gpg --dearmor -o /usr/share/keyrings/mellanox-ofed-keyring.gpg && \
+    echo "deb [signed-by=/usr/share/keyrings/mellanox-ofed-keyring.gpg] https://linux.mellanox.com/public/repo/mlnx_ofed/latest/ubuntu24.04/$(dpkg --print-architecture) ./" > /etc/apt/sources.list.d/mellanox_mlnx_ofed.list
+
+RUN apt-get -qq update && \
+    apt-get -qq install -y \
+        --allow-change-held-packages \
+        --no-install-recommends \
+        --allow-downgrades \
+        build-essential libtool autoconf automake autotools-dev unzip \
+        wget curl openssh-server vim environment-modules \
+        iputils-ping net-tools \
+        libnuma1 libsubunit0 libpci-dev \
+        libpmix-dev \
+        ibverbs-utils libibverbs-dev libibumad3 libibumad-dev librdmacm-dev rdmacm-utils infiniband-diags \
+        git && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+
+FROM base AS builder-base
+RUN apt-get -qq update && \
+    apt-get -qq install -y --no-install-recommends \
+      build-essential devscripts debhelper fakeroot pkg-config check && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+
+FROM builder-base AS libnccl2
+# NCCL
+ARG CUDA_VERSION=12.8.1
+ARG TARGET_NCCL_VERSION='2.28.7-1'
+ARG CUDA_ARCH_LIST='80 89 90 100 120'
+# Converts CUDA_ARCH_LIST to '-gencode=arch=compute_XX,code=sm_XX -gencode=...' format with PTX for the last listed arch
+RUN case "${CUDA_VERSION}" in 12.[0-7].*) \
+      CUDA_ARCH_LIST="${CUDA_ARCH_LIST% 100 120}" ;; \
+    esac && \
+    NVCC_GENCODE="$( \
+    echo "${CUDA_ARCH_LIST}" | sed -e \
+      's:\S\+:-gencode=arch=compute_\0,code=sm_\0:g; s:_[[:digit:]]\+$:\0 -gencode=arch=compute\0,code=compute\0:' \
+    )" && \
+    BUILD_THREADS="$(echo "${NVCC_GENCODE}" | wc -w)" && \
+    if [ "$(uname -m)" = "aarch64" ]; then MAKE_JOBS=4; else MAKE_JOBS=20; fi && \
+    mkdir /tmp/build && \
+    cd /tmp/build && \
+    wget -qO- "https://github.com/NVIDIA/nccl/archive/refs/tags/v${TARGET_NCCL_VERSION}.tar.gz" \
+    | tar --strip-components=1 -xzf - && \
+    NVCC_APPEND_FLAGS="--threads=${BUILD_THREADS}" \
+      make -j${MAKE_JOBS} pkg.debian.build NVCC_GENCODE="${NVCC_GENCODE}" && \
+    cd build/pkg/deb && \
+    mkdir /tmp/libnccl2 && \
+    mv ./libnccl*.deb /tmp/libnccl2/ && \
+    cd /tmp && \
+    rm -r /tmp/build
+
+
+FROM builder-base AS nvbandwidth
+ARG CUDA_VERSION=12.8.1
+ARG NVBANDWIDTH_VERSION='0.8'
+ARG CUDA_ARCH_LIST='80;89;90;100;120'
+RUN case "${CUDA_VERSION}" in 12.[0-7].*) \
+      CUDA_ARCH_LIST="${CUDA_ARCH_LIST%;100*}"; \
+    esac && \
+    mkdir /tmp/build && \
+    cd /tmp/build && \
+    apt-get -qq update && \
+    apt-get -qq install --no-install-recommends -y \
+      libboost-program-options-dev cmake && \
+    apt-get clean && \
+    wget -qO- "https://github.com/NVIDIA/nvbandwidth/archive/refs/tags/v${NVBANDWIDTH_VERSION}.tar.gz" \
+    | tar --strip-components=1 -xzf - && \
+    cmake -DCMAKE_CUDA_ARCHITECTURES="${CUDA_ARCH_LIST}" . && \
+    make -j20 && \
+    mkdir -p /tmp/nvbandwidth/usr/bin && \
+    install nvbandwidth /tmp/nvbandwidth/usr/bin/ && \
+    cd /tmp && \
+    rm -r /tmp/build
+
+
+FROM base AS rebuild-ompi
+# Rebuild OpenMPI from HPC-X sources to add Slurm PMI support.
+# The PyTorch image has HPC-X at /opt/hpcx. We remove its stock OpenMPI
+# and rebuild from source with --with-slurm.
+#
+# If /opt/hpcx/sources/openmpi-gitclone.tar.gz exists (included in the PyTorch
+# image), we use it directly. Otherwise we download the HPC-X tarball to get it.
+SHELL ["/bin/bash", "-c"]
+RUN set -euxo pipefail && \
+    HPCX_DIR="/opt/hpcx" && \
+    # Check if sources are present; if not, download HPC-X to get them \
+    if [ ! -f "${HPCX_DIR}/sources/openmpi-gitclone.tar.gz" ]; then \
+      echo "HPC-X sources not found in image, downloading..." && \
+      ARCH=$(uname -m) && \
+      HPCX_VERSION="v2.21" && \
+      CUDA_MAJOR="cuda12" && \
+      DISTRO_NAME=$(. /etc/os-release && echo "${ID}${VERSION_ID}") && \
+      cd /tmp && \
+      wget -q -O - "https://content.mellanox.com/hpc/hpc-x/${HPCX_VERSION}_${CUDA_MAJOR}/hpcx-${HPCX_VERSION}-gcc-doca_ofed-${DISTRO_NAME}-${CUDA_MAJOR}-${ARCH}.tbz" \
+        | tar xjf - && \
+      DIST_NAME=$(ls -1 | grep "^hpcx-${HPCX_VERSION}") && \
+      mkdir -p "${HPCX_DIR}/sources" && \
+      cp "${DIST_NAME}/sources/openmpi-gitclone.tar.gz" "${HPCX_DIR}/sources/" && \
+      rm -rf /tmp/${DIST_NAME}; \
+    fi && \
+    # Remove stock OpenMPI (not built with Slurm support) \
+    rm -rf "${HPCX_DIR}/ompi" && \
+    # Rebuild OpenMPI with Slurm PMI support \
+    source "${HPCX_DIR}/spx/hpcx-init.sh" && hpcx_load && \
+    cd "${HPCX_DIR}/sources" && \
+    tar -xzf openmpi-gitclone.tar.gz && \
+    cd openmpi-gitclone && \
+    if [ "$(uname -m)" = "aarch64" ]; then MAKE_JOBS=4; else MAKE_JOBS=20; fi && \
+    ./configure -C --prefix="${HPCX_DIR}/ompi" \
+      --with-hcoll="${HPCX_DIR}/hcoll" --with-ucx="${HPCX_DIR}/ucx" \
+      --with-platform=contrib/platform/mellanox/optimized \
+      --with-slurm --with-hwloc --with-libevent \
+      --with-pmix="/usr/lib/$(gcc -print-multiarch)/pmix2" \
+      --without-xpmem --with-cuda --with-ucc="${HPCX_DIR}/ucc" && \
+    make -j${MAKE_JOBS} && \
+    make -j${MAKE_JOBS} install && \
+    cd "${HPCX_DIR}/sources" && \
+    rm -r openmpi-gitclone
+SHELL ["/bin/sh", "-c"]
+
+
+################################################################################
+FROM base AS final
+
+RUN --mount=type=bind,from=libnccl2,source=/tmp/libnccl2,target=/tmp/install \
+    cd /tmp/install && dpkg -i *.deb
+
+COPY --link --from=nvbandwidth /tmp/nvbandwidth/ /
+COPY --link --from=rebuild-ompi /opt/hpcx/ompi /opt/hpcx/ompi
+
+RUN ldconfig
+
+# HPC-X Environment variables
+COPY --chmod=755 ./capture-hpcx-env.sh /tmp
+SHELL ["/bin/bash", "-c"]
+RUN source /opt/hpcx/spx/hpcx-init.sh && \
+    hpcx_load && \
+    # Uncomment to stop a run early with the ENV definitions for the below section
+    # /tmp/capture-hpcx-env.sh ENV && false && \
+    # Preserve environment variables in new login shells \
+    alias install='install --owner=0 --group=0' && \
+    /tmp/capture-hpcx-env.sh export \
+      | install --mode=644 /dev/stdin /etc/profile.d/hpcx-env.sh && \
+    # Preserve environment variables (except *PATH*) when sudoing
+    install -d --mode=0755 /etc/sudoers.d && \
+    /tmp/capture-hpcx-env.sh \
+      | sed -E -e '{ \
+          # Convert NAME=value to just NAME \
+          s:^([^=]+)=.*$:\1:g ; \
+          # Filter out any variables with PATH in their names \
+          /PATH/d ; \
+          # Format them into /etc/sudoers env_keep directives \
+          s:^.*$:Defaults env_keep += "\0":g \
+        }' \
+      | install --mode=440 /dev/stdin /etc/sudoers.d/hpcx-env && \
+    # Register shared libraries with ld regardless of LD_LIBRARY_PATH
+    echo $LD_LIBRARY_PATH | tr ':' '\n' \
+      | install --mode=644 /dev/stdin /etc/ld.so.conf.d/hpcx.conf && \
+    rm /tmp/capture-hpcx-env.sh
+SHELL ["/bin/sh", "-c"]
+
+# The following ENVs are from the output of capture-hpcx-env.sh ENV run against
+# the PyTorch 25.03 + HPC-X 2.21 image with rebuilt OpenMPI.
+# Update these if the base image or HPC-X version changes.
+# Run: /tmp/capture-hpcx-env.sh ENV during build (uncomment above) to regenerate.
+
+# Begin auto-generated paths
+ENV HPCX_DIR=/opt/hpcx
+ENV HPCX_UCX_DIR=/opt/hpcx/ucx
+ENV HPCX_UCC_DIR=/opt/hpcx/ucc
+ENV HPCX_SHARP_DIR=/opt/hpcx/sharp
+ENV HPCX_HCOLL_DIR=/opt/hpcx/hcoll
+ENV HPCX_MPI_DIR=/opt/hpcx/ompi
+ENV HPCX_OSHMEM_DIR=/opt/hpcx/ompi
+ENV HPCX_MPI_TESTS_DIR=/opt/hpcx/ompi/tests
+ENV HPCX_OSU_DIR=/opt/hpcx/ompi/tests/osu-micro-benchmarks
+ENV HPCX_OSU_CUDA_DIR=/opt/hpcx/ompi/tests/osu-micro-benchmarks-cuda
+ENV HPCX_CLUSTERKIT_DIR=/opt/hpcx/clusterkit
+ENV OMPI_HOME=/opt/hpcx/ompi
+ENV MPI_HOME=/opt/hpcx/ompi
+ENV OSHMEM_HOME=/opt/hpcx/ompi
+ENV OPAL_PREFIX=/opt/hpcx/ompi
+ENV PATH=/opt/hpcx/sharp/bin:/opt/hpcx/clusterkit/bin:/opt/hpcx/hcoll/bin:/opt/hpcx/ucc/bin:/opt/hpcx/ucx/bin:/opt/hpcx/ompi/bin:/usr/local/lib/python3.12/dist-packages/torch_tensorrt/bin:/usr/local/nvidia/bin:/usr/local/cuda/bin:/usr/local/mpi/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/ucx/bin:/opt/amazon/efa/bin:/opt/tensorrt/bin
+ENV LD_LIBRARY_PATH=/opt/hpcx/ncclnet_plugin/lib:/opt/hpcx/ucc/lib/ucc:/opt/hpcx/ucc/lib:/opt/hpcx/ucx/lib/ucx:/opt/hpcx/ucx/lib:/opt/hpcx/sharp/lib:/opt/hpcx/hcoll/lib:/opt/hpcx/ompi/lib:/usr/local/lib/python3.12/dist-packages/torch/lib:/usr/local/lib/python3.12/dist-packages/torch_tensorrt/lib:/usr/local/cuda/compat/lib:/usr/local/nvidia/lib:/usr/local/nvidia/lib64
+ENV LIBRARY_PATH=/opt/hpcx/ncclnet_plugin/lib:/opt/hpcx/ompi/lib:/opt/hpcx/sharp/lib:/opt/hpcx/ucc/lib:/opt/hpcx/ucx/lib:/opt/hpcx/hcoll/lib:/opt/hpcx/ompi/lib:/usr/local/cuda/lib64/stubs:
+ENV CPATH=/opt/hpcx/ompi/include:/opt/hpcx/ucc/include:/opt/hpcx/ucx/include:/opt/hpcx/sharp/include:/opt/hpcx/hcoll/include
+ENV PKG_CONFIG_PATH=/opt/hpcx/hcoll/lib/pkgconfig:/opt/hpcx/sharp/lib/pkgconfig:/opt/hpcx/ucx/lib/pkgconfig:/opt/hpcx/ompi/lib/pkgconfig
+ENV OLD_PATH=/usr/local/lib/python3.12/dist-packages/torch_tensorrt/bin:/usr/local/nvidia/bin:/usr/local/cuda/bin:/usr/local/mpi/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/local/ucx/bin:/opt/amazon/efa/bin:/opt/tensorrt/bin
+ENV OLD_LD_LIBRARY_PATH=/usr/local/lib/python3.12/dist-packages/torch/lib:/usr/local/lib/python3.12/dist-packages/torch_tensorrt/lib:/usr/local/cuda/compat/lib:/usr/local/nvidia/lib:/usr/local/nvidia/lib64
+ENV OLD_LIBRARY_PATH=/usr/local/cuda/lib64/stubs:
+ENV OLD_CPATH=
+# End of auto-generated paths
+
+# Disable UCX VFS to stop errors about fuse mount failure
+ENV UCX_VFS_ENABLE=no
+
+# NCCL Tests
+ENV NCCL_TESTS_COMMITISH=9a5c15461abcef145b907c54d04aea4e8d1cb21f
+WORKDIR /opt/nccl-tests
+RUN wget -q -O - https://github.com/NVIDIA/nccl-tests/archive/${NCCL_TESTS_COMMITISH}.tar.gz | tar --strip-components=1 -xzf - && \
+    make -j20 MPI=1 && \
+    ln -s /opt/nccl-tests /opt/nccl_tests
+
+RUN ldconfig
+
+# SSH dependencies for MPI
+RUN sed -i 's/[ #]\(.*StrictHostKeyChecking \).*/ \1no/g' /etc/ssh/ssh_config && \
+    echo "    UserKnownHostsFile /dev/null" >> /etc/ssh/ssh_config && \
+    sed -i 's/#\(StrictModes \).*/\1no/g' /etc/ssh/sshd_config && \
+    mkdir /var/run/sshd -p
