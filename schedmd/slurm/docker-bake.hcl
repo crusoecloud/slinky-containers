@@ -266,7 +266,9 @@ target "_pyxis" {
   context = context
   dockerfile = "Dockerfile.pyxis"
   args = {
-    REGISTRY = REGISTRY
+    REGISTRY     = REGISTRY
+    SLURMD_IMAGE = format_tag(REGISTRY, "slurmd", slurm_version(slurm_version), linux_flavor, SUFFIX)
+    LOGIN_IMAGE  = format_tag(REGISTRY, "login", slurm_version(slurm_version), linux_flavor, SUFFIX)
   }
 }
 

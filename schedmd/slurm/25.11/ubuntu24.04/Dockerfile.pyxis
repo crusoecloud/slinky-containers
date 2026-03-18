@@ -3,9 +3,11 @@
 # SPDX-License-Identifier: Apache-2.0
 
 ARG REGISTRY=ghcr.io/slinkyproject
+ARG SLURMD_IMAGE=ghcr.io/slinkyproject/slurmd:25.11-ubuntu24.04
+ARG LOGIN_IMAGE=ghcr.io/slinkyproject/login:25.11-ubuntu24.04
 
 ################################################################################
-FROM ${REGISTRY}/slurmd:25.11-ubuntu24.04 AS download
+FROM ${SLURMD_IMAGE} AS download
 
 SHELL ["bash", "-c"]
 
@@ -43,7 +45,7 @@ tar -zxvf pyxis.tar.gz -C pyxis --strip-components=1
 EOR
 
 ################################################################################
-FROM ${REGISTRY}/slurmd:25.11-ubuntu24.04 AS slurmd-pyxis
+FROM ${SLURMD_IMAGE} AS slurmd-pyxis
 
 ARG DEBIAN_FRONTEND=noninteractive
 
@@ -104,7 +106,7 @@ rm *.gpgkey
 EOR
 
 ################################################################################
-FROM ${REGISTRY}/login:25.11-ubuntu24.04 AS login-pyxis
+FROM ${LOGIN_IMAGE} AS login-pyxis
 
 ARG DEBIAN_FRONTEND=noninteractive
 
