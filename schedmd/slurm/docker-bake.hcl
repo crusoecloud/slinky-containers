@@ -147,7 +147,7 @@ target "hpcx_base" {
   context = context
   dockerfile = "Dockerfile.hpcx"
   tags = [
-    format_tag(REGISTRY, "hpcx-base", "cuda12.8.1", linux_flavor, SUFFIX),
+    format_tag(REGISTRY, "hpcx-base", "cuda13.2.0", linux_flavor, SUFFIX),
   ]
   labels = {
     "org.opencontainers.image.title" = "HPCX Base Image"
