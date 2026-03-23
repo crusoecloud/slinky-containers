@@ -12,6 +12,7 @@ export SSHD_OPTIONS="${SSHD_OPTIONS:-}"
 export SSSD_OPTIONS="${SSSD_OPTIONS:-}"
 
 # Ref: https://slurm.schedmd.com/pam_slurm_adopt.html#OPTIONS
+export PAM_SLURM_ADOPT_ENABLED="${PAM_SLURM_ADOPT_ENABLED:-0}"
 export PAM_SLURM_ADOPT_OPTIONS="${PAM_SLURM_ADOPT_OPTIONS:-"action_adopt_failure=deny action_generic_failure=deny"}"
 
 # The asserted CPU resource limit of the pod.
@@ -129,7 +130,10 @@ function main() {
 	mkdir -p /run/slurm/
 
 	ssh-keygen -A
-	configure_pam_slurm
+	
+	if [[ "$PAM_SLURM_ADOPT_ENABLED" == "1" ]]; then
+		configure_pam_slurm
+	fi
 
 	# Ref: https://slurm.schedmd.com/slurm.conf.html#OPT_CoreSpecCount
 	local coreSpecCount=0
