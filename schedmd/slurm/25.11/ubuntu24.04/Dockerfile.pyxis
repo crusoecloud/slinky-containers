@@ -73,13 +73,8 @@ make install
 # Configure
 mkdir -m 777 -p /usr/share/enroot/enroot-data/
 mkdir -m 755 -p /run/enroot/
-# /var/lib/slurm-plugstack is the target directory for the plugstack ConfigMap mount.
-# PlugStackConfig in slurm.conf (injected by crusoe-slurm-operator) points Slurm here.
-mkdir -m 755 -p /var/lib/slurm-plugstack
-# NOTE: /etc/slurm/ is overlaid by Slinky on all login/worker pods, so any files or
-# symlinks created there at image build time are hidden at runtime. Removed:
-# mkdir -m 644 -p /etc/slurm/plugstack.conf.d/
-# ln -sf /var/lib/slurm-plugstack/plugstack.conf /etc/slurm/plugstack.conf
+# plugstack.conf is delivered to slurmd/login via Slurm's configless protocol from slurmctld.
+# NOTE: The original SchedMD approach was to symlink to /etc/slurm, leaving here for reference
 # ln -s /usr/share/pyxis/pyxis.conf /etc/slurm/plugstack.conf.d/pyxis.conf
 # Fix NVIDIA proc mount for GPUs
 sed -i '2i mount -t proc none /proc 2>/dev/null || true' /usr/local/bin/entrypoint.sh
@@ -134,13 +129,8 @@ make install
 # Configure
 mkdir -m 777 -p /usr/share/enroot/enroot-data/
 mkdir -m 755 -p /run/enroot/
-# /var/lib/slurm-plugstack is the target directory for the plugstack ConfigMap mount.
-# PlugStackConfig in slurm.conf (injected by crusoe-slurm-operator) points Slurm here.
-mkdir -m 755 -p /var/lib/slurm-plugstack
-# NOTE: /etc/slurm/ is overlaid by Slinky on all login/worker pods, so any files or
-# symlinks created there at image build time are hidden at runtime. Removed:
-# mkdir -m 644 -p /etc/slurm/plugstack.conf.d/
-# ln -sf /var/lib/slurm-plugstack/plugstack.conf /etc/slurm/plugstack.conf
+# plugstack.conf is delivered to slurmd/login via Slurm's configless protocol from slurmctld.
+# NOTE: The original SchedMD approach was to symlink to /etc/slurm, leaving here for reference
 # ln -s /usr/share/pyxis/pyxis.conf /etc/slurm/plugstack.conf.d/pyxis.conf
 # Fix NVIDIA proc mount for GPUs
 sed -i '2i mount -t proc none /proc 2>/dev/null || true' /usr/local/bin/entrypoint.sh
