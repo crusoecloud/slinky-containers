@@ -223,7 +223,7 @@ publish_ghcr:
           "${CI_REGISTRY_IMAGE}/${IMAGE}:${IMAGE_TAG_LATEST}"
       done
 
-    - echo "Published 5 images to ghcr.io with tag ${SLURM_VERSION_FULL}-${LINUX_FLAVOR}-${CMK_TAG}"
+    - echo "Published $(echo ${GHCR_IMAGES} | wc -w) images to ghcr.io with tag ${SLURM_VERSION_FULL}-${LINUX_FLAVOR}-${CMK_TAG}"
 
   # Ensure only one publish_ghcr job runs at a time
   resource_group: publish-ghcr
