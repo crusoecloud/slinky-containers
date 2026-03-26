@@ -49,6 +49,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 COPY --from=download /tmp/*.deb ./
 COPY --from=download /etc/enroot/hooks.d/* /etc/enroot/hooks.d/
+COPY --from=buildctx files/etc/enroot/hooks.d/* /etc/enroot/hooks.d/
 COPY --from=download /usr/share/bash-completion/completions/* /usr/share/bash-completion/completions/
 
 COPY --from=download /tmp/pyxis /tmp/pyxis
@@ -72,11 +73,13 @@ make install
 # Configure
 mkdir -m 777 -p /usr/share/enroot/enroot-data/
 mkdir -m 755 -p /run/enroot/
-mkdir -m 644 -p /etc/slurm/plugstack.conf.d/
-ln -s /usr/share/pyxis/pyxis.conf /etc/slurm/plugstack.conf.d/pyxis.conf
+# plugstack.conf is delivered to slurmd/login via Slurm's configless protocol from slurmctld.
+# NOTE: The original SchedMD approach was to symlink to /etc/slurm, leaving here for reference
+# ln -s /usr/share/pyxis/pyxis.conf /etc/slurm/plugstack.conf.d/pyxis.conf
 # Fix NVIDIA proc mount for GPUs
 sed -i '2i mount -t proc none /proc 2>/dev/null || true' /usr/local/bin/entrypoint.sh
 sed -i '2i mount -t tmpfs tmpfs /tmp 2>/dev/null || true' /usr/local/bin/entrypoint.sh
+chmod 755 /usr/local/bin/entrypoint.sh
 EOR
 
 ADD https://nvidia.github.io/libnvidia-container/gpgkey libnvidia-container.gpgkey
@@ -102,6 +105,7 @@ ARG DEBIAN_FRONTEND=noninteractive
 
 COPY --from=download /tmp/*.deb ./
 COPY --from=download /etc/enroot/hooks.d/* /etc/enroot/hooks.d/
+COPY --from=buildctx files/etc/enroot/hooks.d/* /etc/enroot/hooks.d/
 COPY --from=download /usr/share/bash-completion/completions/* /usr/share/bash-completion/completions/
 
 COPY --from=download /tmp/pyxis /tmp/pyxis
@@ -125,11 +129,13 @@ make install
 # Configure
 mkdir -m 777 -p /usr/share/enroot/enroot-data/
 mkdir -m 755 -p /run/enroot/
-mkdir -m 644 -p /etc/slurm/plugstack.conf.d/
-ln -s /usr/share/pyxis/pyxis.conf /etc/slurm/plugstack.conf.d/pyxis.conf
+# plugstack.conf is delivered to slurmd/login via Slurm's configless protocol from slurmctld.
+# NOTE: The original SchedMD approach was to symlink to /etc/slurm, leaving here for reference
+# ln -s /usr/share/pyxis/pyxis.conf /etc/slurm/plugstack.conf.d/pyxis.conf
 # Fix NVIDIA proc mount for GPUs
 sed -i '2i mount -t proc none /proc 2>/dev/null || true' /usr/local/bin/entrypoint.sh
 sed -i '2i mount -t tmpfs tmpfs /tmp 2>/dev/null || true' /usr/local/bin/entrypoint.sh
+chmod 755 /usr/local/bin/entrypoint.sh
 EOR
 
 ADD https://nvidia.github.io/libnvidia-container/gpgkey libnvidia-container.gpgkey
