@@ -34,6 +34,7 @@ variables:
   SLURM_VERSION: "25.11"
   SLURM_VERSION_FULL: "25.11.2"
   LINUX_FLAVOR: "ubuntu24.04"
+  BUILD_GROUP: "all"  # Options: core, all, extras
   BUILD_CONTEXT: "./schedmd/slurm"
 
   # Bake configuration
@@ -92,9 +93,9 @@ build_images:
     # Set suffix for commit specific tag
     - export SUFFIX="${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}"
     
-    # Build core images using docker bake
+    # Build all images using docker bake
     - |
-      echo "Building base images with docker bake..."
+      echo "Building images with docker bake..."
       docker buildx bake \
         ${BAKE_FILES} \
         --set "*.cache-to=type=inline" \
@@ -104,21 +105,11 @@ build_images:
         --set "slurmrestd.cache-from=type=registry,ref=${CI_REGISTRY_IMAGE}/slurmrestd:${IMAGE_TAG_BRANCH}" \
         --set "sackd.cache-from=type=registry,ref=${CI_REGISTRY_IMAGE}/sackd:${IMAGE_TAG_BRANCH}" \
         --set "login.cache-from=type=registry,ref=${CI_REGISTRY_IMAGE}/login:${IMAGE_TAG_BRANCH}" \
-        --set "*.platform=linux/amd64" \
-        --set "*.output=type=registry" \
-        core
-
-    # Build pyxis images using docker bake
-    - |
-      echo "Building pyxis images with docker bake..."
-      docker buildx bake \
-        ${BAKE_FILES} \
-        --set "*.cache-to=type=inline" \
         --set "slurmd_pyxis.cache-from=type=registry,ref=${CI_REGISTRY_IMAGE}/slurmd-pyxis:${IMAGE_TAG_BRANCH}" \
         --set "login_pyxis.cache-from=type=registry,ref=${CI_REGISTRY_IMAGE}/login-pyxis:${IMAGE_TAG_BRANCH}" \
         --set "*.platform=linux/amd64" \
         --set "*.output=type=registry" \
-        extras
+        ${BUILD_GROUP}
 
     # Re-tag images with branch-latest tags for easier reference
     - |
