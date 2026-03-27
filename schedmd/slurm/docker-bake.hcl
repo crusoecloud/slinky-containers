@@ -254,6 +254,9 @@ target "_pyxis" {
   dockerfile = "Dockerfile.pyxis"
   args = {
     REGISTRY = REGISTRY
+    SLURM_VERSION = slurm_version
+    LINUX_FLAVOR = linux_flavor
+    SUFFIX = SUFFIX
   }
 }
 
