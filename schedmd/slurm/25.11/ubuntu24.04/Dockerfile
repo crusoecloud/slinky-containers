@@ -199,7 +199,8 @@ set -xeuo pipefail
 apt-get -qq update
 apt-get -qq -y install --no-install-recommends --fix-broken \
   gawk socat \
-  openssh-server
+  openssh-server \
+  sudo
 # Configure
 mkdir -p /var/spool/slurmd/
 rm -f /etc/ssh/ssh_host_*
@@ -213,6 +214,7 @@ COPY \
   /etc/supervisor/conf.d/
 COPY files/usr/local/bin/fakesystemd.sh /usr/local/bin/
 COPY --chmod=755 files/usr/local/bin/slurmd-entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY --chmod=440 files/etc/sudoers.d/slurm-admin /etc/sudoers.d/slurm-admin
 
 EXPOSE 6818/tcp 22/tcp
 ENTRYPOINT ["entrypoint.sh"]
@@ -324,6 +326,7 @@ COPY \
   /etc/supervisor/conf.d/
 COPY files/usr/local/bin/fakesystemd.sh /usr/local/bin/
 COPY --chmod=755 files/usr/local/bin/login-entrypoint.sh /usr/local/bin/entrypoint.sh
+COPY --chmod=440 files/etc/sudoers.d/slurm-admin /etc/sudoers.d/slurm-admin
 
 EXPOSE 22/tcp
 ENTRYPOINT ["entrypoint.sh"]
