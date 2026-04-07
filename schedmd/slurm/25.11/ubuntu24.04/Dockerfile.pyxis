@@ -113,6 +113,9 @@ apt-get -qq -y install --no-install-recommends \
 rm *.gpgkey
 EOR
 
+# Example SBATCH scripts
+COPY --chmod=755 --from=buildctx files/opt/examples/ /opt/examples/
+
 ################################################################################
 FROM ${REGISTRY}/login:${PARENT_IMAGE_TAG} AS login-pyxis
 
@@ -177,3 +180,6 @@ apt-get -qq -y install --no-install-recommends \
   nvidia-container-toolkit
 rm *.gpgkey
 EOR
+
+# Example SBATCH scripts
+COPY --chmod=755 --from=buildctx files/opt/examples/ /opt/examples/
