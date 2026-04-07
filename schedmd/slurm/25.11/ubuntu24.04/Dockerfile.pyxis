@@ -79,6 +79,15 @@ make install
 # Configure
 mkdir -m 777 -p /usr/share/enroot/enroot-data/
 mkdir -m 755 -p /run/enroot/
+# Create per-user enroot data directory on local storage (sticky bit for multi-user isolation).
+# Avoids VAST NFS colon filename limitation when extracting container images.
+mkdir -m 1777 -p /var/lib/enroot
+# Redirect enroot data path to local storage. Each user gets an isolated subdirectory
+# via ${USER}.
+echo 'ENROOT_DATA_PATH /var/lib/enroot/$${USER}' >> /etc/enroot/enroot.conf
+# Enable squashfuse for direct sqsh file references (faster startup, no extraction).
+# Named containers and docker image references still extract to ENROOT_DATA_PATH.
+sed -i 's|spank_pyxis.so|spank_pyxis.so use_squashfuse=true|' /usr/local/share/pyxis/pyxis.conf
 # plugstack.conf is delivered to slurmd/login via Slurm's configless protocol from slurmctld.
 # NOTE: The original SchedMD approach was to symlink to /etc/slurm, leaving here for reference
 # ln -s /usr/share/pyxis/pyxis.conf /etc/slurm/plugstack.conf.d/pyxis.conf
@@ -135,6 +144,15 @@ make install
 # Configure
 mkdir -m 777 -p /usr/share/enroot/enroot-data/
 mkdir -m 755 -p /run/enroot/
+# Create per-user enroot data directory on local storage (sticky bit for multi-user isolation).
+# Avoids VAST NFS colon filename limitation when extracting container images.
+mkdir -m 1777 -p /var/lib/enroot
+# Redirect enroot data path to local storage. Each user gets an isolated subdirectory
+# via ${USER}.
+echo 'ENROOT_DATA_PATH /var/lib/enroot/$${USER}' >> /etc/enroot/enroot.conf
+# Enable squashfuse for direct sqsh file references (faster startup, no extraction).
+# Named containers and docker image references still extract to ENROOT_DATA_PATH.
+sed -i 's|spank_pyxis.so|spank_pyxis.so use_squashfuse=true|' /usr/local/share/pyxis/pyxis.conf
 # plugstack.conf is delivered to slurmd/login via Slurm's configless protocol from slurmctld.
 # NOTE: The original SchedMD approach was to symlink to /etc/slurm, leaving here for reference
 # ln -s /usr/share/pyxis/pyxis.conf /etc/slurm/plugstack.conf.d/pyxis.conf
