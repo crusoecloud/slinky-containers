@@ -84,7 +84,7 @@ mkdir -m 755 -p /run/enroot/
 mkdir -m 1777 -p /var/lib/enroot
 # Redirect enroot data path to local storage. Each user gets an isolated subdirectory
 # via ${USER}.
-echo 'ENROOT_DATA_PATH /var/lib/enroot/\${USER}' >> /etc/enroot/enroot.conf
+printf '%s\n' 'ENROOT_DATA_PATH /var/lib/enroot/${USER}' >> /etc/enroot/enroot.conf
 # Enable squashfuse for direct sqsh file references (faster startup, no extraction).
 # Named containers and docker image references still extract to ENROOT_DATA_PATH.
 sed -i 's|spank_pyxis.so|spank_pyxis.so use_squashfuse=true|' /usr/local/share/pyxis/pyxis.conf
@@ -149,7 +149,7 @@ mkdir -m 755 -p /run/enroot/
 mkdir -m 1777 -p /var/lib/enroot
 # Redirect enroot data path to local storage. Each user gets an isolated subdirectory
 # via ${USER}.
-echo 'ENROOT_DATA_PATH /var/lib/enroot/\${USER}' >> /etc/enroot/enroot.conf
+printf '%s\n' 'ENROOT_DATA_PATH /var/lib/enroot/${USER}' >> /etc/enroot/enroot.conf
 # Enable squashfuse for direct sqsh file references (faster startup, no extraction).
 # Named containers and docker image references still extract to ENROOT_DATA_PATH.
 sed -i 's|spank_pyxis.so|spank_pyxis.so use_squashfuse=true|' /usr/local/share/pyxis/pyxis.conf
