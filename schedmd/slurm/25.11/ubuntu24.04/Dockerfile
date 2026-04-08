@@ -328,5 +328,15 @@ COPY files/usr/local/bin/fakesystemd.sh /usr/local/bin/
 COPY --chmod=755 files/usr/local/bin/login-entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY --chmod=440 files/etc/sudoers.d/slurm-admin /etc/sudoers.d/slurm-admin
 
+# Worker SSH: per-user key copy on session open (PAM exec) and SSH client config drop-in.
+# /var/lib/worker-ssh-private-keys-perms/: per-user copies with correct ownership (0711 root:root).
+# /etc/ssh/ssh_config.d/99-crusoe-worker.conf: tells ssh(1) to use the per-user key.
+COPY --chmod=755 files/usr/local/bin/setup-worker-ssh-key.sh /usr/local/bin/
+RUN mkdir -p /var/lib/worker-ssh-private-keys-perms && \
+    chmod 711 /var/lib/worker-ssh-private-keys-perms && \
+    mkdir -p /etc/ssh/ssh_config.d && \
+    printf 'IdentityFile /var/lib/worker-ssh-private-keys-perms/%%u\n' \
+      > /etc/ssh/ssh_config.d/99-crusoe-worker.conf
+
 EXPOSE 22/tcp
 ENTRYPOINT ["entrypoint.sh"]
