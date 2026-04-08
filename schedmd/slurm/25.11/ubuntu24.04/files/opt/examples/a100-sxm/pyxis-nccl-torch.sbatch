@@ -3,7 +3,7 @@
 #SBATCH --job-name=pyxis_nccl_torch
 #SBATCH --nodes=2
 #SBATCH --ntasks-per-node=1
-#SBATCH --gres=gpu:8
+#SBATCH --gpus-per-node=8
 #SBATCH --output="%x_%j.out"
 #SBATCH --time=01:00:00
 
@@ -32,7 +32,7 @@ export CONTAINER_SQSH='./nvidia-pytorch_25.12-py3.sqsh'
 export CONTAINER_NAME='pyxis-torch'
 
 # Set up environment variables for torchrun
-GPUS_PER_NODE=8
+GPUS_PER_NODE=$SLURM_GPUS_PER_NODE
 NNODES=$SLURM_NNODES
 MASTER_ADDR=$(scontrol show hostnames $SLURM_JOB_NODELIST | head -n 1)
 MASTER_PORT=6000
@@ -40,7 +40,7 @@ MASTER_PORT=6000
 srun --container-writable \
      --container-name=${CONTAINER_NAME} \
      --container-image=${CONTAINER_IMAGE} \
-     --container-mounts=/opt/examples/torch:/workspace,/etc/crusoe:/etc/crusoe:ro \
+     --container-mounts=/opt/examples/a100-sxm/torch:/workspace,/etc/crusoe:/etc/crusoe:ro \
      python -u -m torch.distributed.run \
          --nproc_per_node $GPUS_PER_NODE \
          --nnodes $NNODES \
