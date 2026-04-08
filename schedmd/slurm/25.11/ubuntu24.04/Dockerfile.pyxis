@@ -114,7 +114,7 @@ rm *.gpgkey
 EOR
 
 # Example SBATCH scripts
-COPY --chmod=777 --from=buildctx files/opt/examples/ /opt/examples/
+COPY --chmod=755 --from=buildctx files/opt/examples/ /opt/examples/
 
 ################################################################################
 FROM ${REGISTRY}/login:${PARENT_IMAGE_TAG} AS login-pyxis
@@ -182,4 +182,4 @@ rm *.gpgkey
 EOR
 
 # Example SBATCH scripts
-COPY --chmod=777 --from=buildctx files/opt/examples/ /opt/examples/
+COPY --chmod=755 --from=buildctx files/opt/examples/ /opt/examples/

@@ -23,8 +23,6 @@ Important notes:
 
 - currently this benchmark scans a payload range of 32KB to 16GB.
 
-- this benchmark automatically generates a plot of the results if you have `matplotlib` installed.
-
 - if you are wondering whether you need to also run https://github.com/NVIDIA/nccl-tests - I
   already validated that I got very similar results with ./build/all_reduce_perf -b 4G -e 4G
   (tested with mpirun on 4 nodes). It should be either on par or slightly slower because it uses a
@@ -37,7 +35,7 @@ Important notes:
 - you can interrupt (Ctrl-C) the benchmark in the middle and it'll complete with the results it has
   measured so far.
 
-- you can also profile a single payload and get a plot with results for each iteration - for that use --profile_stability --payload_size_in_gib 0.5 (change the last value to the desired payload size in GiB)
+- you can also profile a single payload and get results for each iteration - for that use --profile_stability --payload_size_in_gib 0.5 (change the last value to the desired payload size in GiB)
 
 Examples:
 
@@ -103,7 +101,6 @@ PDSH_RCMD_TYPE=ssh pdsh -w $HOSTS python -u -m torch.distributed.run --nproc_per
 
 """
 
-from pathlib import Path
 import argparse
 import datetime
 import gc
@@ -111,7 +108,6 @@ import os
 import signal
 import socket
 import sys
-import textwrap
 import time
 import torch
 import torch.distributed as dist
@@ -138,71 +134,6 @@ def get_device_info():
         return repr(torch.hpu.get_device_properties('hpu'))
     else:
         return "Unknown accelerator"
-
-def plot_averages(path, x, y, ranks):
-
-    try:
-        import matplotlib.pyplot as plt
-    except:
-        print("!!! Can't generate plot. Please run `pip install matplotlib` to enable plotting. !!!\n")
-        return
-
-    print(f"\n*** Plotting results into {path}\n")
-
-    plt.figure(dpi=500)
-    plt.plot(x, y)
-    plt.xlabel(f"Message size")
-    plt.ylabel("Bus bandwidth (GBps)")
-    plt.title(f"all-reduce bus bandwidth on ranks={ranks}")
-    plt.xticks(rotation=45)
-
-    device_info = get_device_info()
-
-    # wrap notes - this can now handle several lines of text.
-    notes = "\n".join(textwrap.wrap(device_info, width=60))
-
-    plt.annotate(notes,
-                 xy=(0.001, -0.3),
-                 xycoords='axes fraction',
-                 ha='left',
-                 va="center",
-                 fontsize=10)
-
-    plt.savefig(path, bbox_inches='tight')
-
-
-def plot_profile(path, y, ranks):
-
-    try:
-        import matplotlib.pyplot as plt
-    except:
-        print("!!! Can't generate plot. Please run `pip install matplotlib` to enable plotting. !!!\n")
-        return
-
-    print(f"\n*** Plotting results into {path}\n")
-
-    plt.figure(dpi=500)
-    plt.plot(y)
-    plt.xlabel(f"Iteration")
-    plt.ylabel("Bus bandwidth (GBps)")
-    plt.title(f"all-reduce bus bandwidth profile for {args.payload_size_in_gib}GiB payload on ranks={ranks}")
-    #plt.xticks(rotation=45)
-
-    device_info = get_device_info()
-
-    # wrap notes - this can now handle several lines of text.
-    notes = "\n".join(textwrap.wrap(device_info, width=60))
-
-    plt.annotate(notes,
-                 xy=(0.001, -0.3),
-                 xycoords='axes fraction',
-                 ha='left',
-                 va="center",
-                 fontsize=10)
-
-    plt.savefig(path, bbox_inches='tight')
-
-
 
 def timed_allreduce(tensor, size, start_event, end_event):
     dist.barrier()
@@ -267,10 +198,6 @@ def run(local_rank):
             print(f"| ---------: | ---------: |")
             for i in range(len(busbw_points)):
                 print(f"| {conv_to_GBps(busbw_points[i]):6.2f}GBps | {conv_to_GBps(algbw_points[i]):6.2f}GBps |")
-            busbw_GBps = [conv_to_GBps(x) for x in busbw_points]
-            plot_path = f"busbw-profile-{hostname}-{ranks}.png"
-            plot_profile(plot_path, busbw_GBps, ranks)
-
 
         else:
             print(f"The average bandwidth of all_reduce over {ranks} ranks ({args.num_warmup_iterations} warmups / {args.num_iterations} trials):\n")
@@ -278,11 +205,6 @@ def run(local_rank):
             print(f"| ------: | ---------: | ---------: |")
             for size in busbw.keys():
                 print(f"| {fmt_bytes(size):>7} | {conv_to_GBps(busbw[size]):6.2f}GBps | {conv_to_GBps(algbw[size]):6.2f}GBps |")
-
-            busbw_GBps = [conv_to_GBps(x) for x in busbw.values()]
-            sizes_fmted = [fmt_bytes(x) for x in busbw.keys()]
-            plot_path = f"busbw-mean-{hostname}-{ranks}.png"
-            plot_averages(plot_path, sizes_fmted, busbw_GBps, ranks)
 
         time_delta = time.time() - start_time
         time_str = str(datetime.timedelta(seconds=time_delta)).split(".")[0]
