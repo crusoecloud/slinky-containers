@@ -18,6 +18,11 @@ KEY_DST="/var/lib/worker-ssh-private-keys-perms/${USERNAME}"
 USER_UID=$(id -u "${USERNAME}" 2>/dev/null) || exit 0
 USER_GID=$(id -g "${USERNAME}" 2>/dev/null) || exit 0
 
-cp "${KEY_SRC}" "${KEY_DST}"
-chmod 600 "${KEY_DST}"
-chown "${USER_UID}:${USER_GID}" "${KEY_DST}"
+if [ "${PAM_TYPE}" = "open_session" ]; then
+    cp "${KEY_SRC}" "${KEY_DST}"
+    chmod 600 "${KEY_DST}"
+    chown "${USER_UID}:${USER_GID}" "${KEY_DST}"
+elif [ "${PAM_TYPE}" = "close_session" ]; then
+    # -f so that we don't fail if key was never created, which would block session close
+    rm -f "${KEY_DST}"
+fi
