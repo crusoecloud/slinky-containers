@@ -43,6 +43,8 @@ target "_slurm" {
   args = {
     SLURM_VERSION = slurm_version
     REGISTRY = REGISTRY
+    LINUX_FLAVOR = linux_flavor
+    SUFFIX = SUFFIX
   }
   labels = {
     # Ref: https://github.com/opencontainers/image-spec/blob/v1.0/annotations.md
