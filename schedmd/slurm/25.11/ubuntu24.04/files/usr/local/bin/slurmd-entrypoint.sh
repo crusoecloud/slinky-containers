@@ -11,6 +11,9 @@ export SLURMD_OPTIONS="${SLURMD_OPTIONS:-} $*"
 export SSHD_OPTIONS="${SSHD_OPTIONS:-}"
 export SSSD_OPTIONS="${SSSD_OPTIONS:-}"
 
+# Initialize lmod in non-interactive bash shells (sbatch/srun job scripts).
+export BASH_ENV=/usr/share/lmod/lmod/init/bash
+
 # Ref: https://slurm.schedmd.com/pam_slurm_adopt.html#OPTIONS
 export PAM_SLURM_ADOPT_ENABLED="${PAM_SLURM_ADOPT_ENABLED:-0}"
 export PAM_SLURM_ADOPT_OPTIONS="${PAM_SLURM_ADOPT_OPTIONS:-"action_adopt_failure=deny action_generic_failure=deny"}"
