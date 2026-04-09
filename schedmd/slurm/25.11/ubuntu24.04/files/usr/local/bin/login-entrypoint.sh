@@ -9,6 +9,9 @@ export SSHD_OPTIONS="${SSHD_OPTIONS:-""}"
 export SACKD_OPTIONS="${SACKD_OPTIONS:-""}"
 export SSSD_OPTIONS="${SSSD_OPTIONS:-""}"
 
+# Initialize lmod in non-interactive bash shells (sbatch/srun job scripts).
+export BASH_ENV=/usr/share/lmod/lmod/init/bash
+
 function main() {
 	mkdir -p /run/sshd/
 	chmod 0755 /run/sshd/
