@@ -216,6 +216,11 @@ COPY files/usr/local/bin/fakesystemd.sh /usr/local/bin/
 COPY --chmod=755 files/usr/local/bin/slurmd-entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY --chmod=440 files/etc/sudoers.d/slurm-admin /etc/sudoers.d/slurm-admin
 
+# Stub setup-worker-ssh-key.sh: PAM config is shared with login pods,
+# but worker nodes do not manage SSH keys.
+RUN printf '#!/bin/bash\nexit 0\n' > /usr/local/bin/setup-worker-ssh-key.sh && \
+    chmod 755 /usr/local/bin/setup-worker-ssh-key.sh
+
 EXPOSE 6818/tcp 22/tcp
 ENTRYPOINT ["entrypoint.sh"]
 
