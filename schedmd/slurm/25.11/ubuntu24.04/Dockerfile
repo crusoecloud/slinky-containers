@@ -147,7 +147,7 @@ RUN <<EOR
 set -xeuo pipefail
 mkdir -p /var/lib/nsscache /var/lib/system-config /var/lib/ssh-keys /etc/ssh/sshd_config.d
 # Seed /var/lib/system-config with system defaults so symlinks are never
-# dangling at build time — PAM must remain functional for subsequent package installs.
+# dangling at build time - PAM must remain functional for subsequent package installs.
 cp /etc/nsswitch.conf /var/lib/system-config/nsswitch.conf
 for f in common-account common-auth common-session; do
   cp /etc/pam.d/$f /var/lib/system-config/$f
@@ -328,13 +328,15 @@ COPY files/usr/local/bin/fakesystemd.sh /usr/local/bin/
 COPY --chmod=755 files/usr/local/bin/login-entrypoint.sh /usr/local/bin/entrypoint.sh
 COPY --chmod=440 files/etc/sudoers.d/slurm-admin /etc/sudoers.d/slurm-admin
 
-# Worker SSH: per-user key copy on session open (PAM exec) and SSH client config drop-in.
-# /var/lib/worker-ssh-private-keys-perms/: per-user copies with correct ownership (0711 root:root).
-# /etc/ssh/ssh_config.d/99-crusoe-worker.conf: tells ssh(1) to use the per-user key.
+# Worker SSH: per-user key copy on session open (PAM exec).
+# /var/lib/worker-ssh-private-keys-perms: per-user copies with correct ownership (0711 root:root).
 COPY --chmod=755 files/usr/local/bin/setup-worker-ssh-key.sh /usr/local/bin/
-RUN mkdir -p /var/lib/worker-ssh-private-keys-perms && \
-    chmod 711 /var/lib/worker-ssh-private-keys-perms && \
-    mkdir -p /etc/ssh/ssh_config.d && \
+RUN mkdir -p /var/lib/worker-ssh-private-keys /var/lib/worker-ssh-private-keys-perms && \
+    chmod 711 /var/lib/worker-ssh-private-keys-perms
+
+# Worker SSH: SSH client config drop-in.
+# /etc/ssh/ssh_config.d/99-crusoe-worker.conf: tells ssh(1) to use the per-user key.
+RUN mkdir -p /etc/ssh/ssh_config.d && \
     printf 'IdentityFile /var/lib/worker-ssh-private-keys-perms/%%u\n' \
       > /etc/ssh/ssh_config.d/99-crusoe-worker.conf
 

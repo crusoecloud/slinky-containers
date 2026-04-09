@@ -3,7 +3,7 @@
 # Copies the CSO-generated worker SSH private key from the read-only Secret volume
 # to /var/lib/worker-ssh-private-keys-perms/ with per-user ownership (0600).
 # The SSH client config drop-in (/etc/ssh/ssh_config.d/99-crusoe-worker.conf) points
-# ssh(1) to this location via IdentityFile, enabling login-pod→worker SSH without
+# ssh(1) to this location via IdentityFile, enabling login-pod -> worker SSH without
 # agent forwarding.
 #
 # No-op if the private keys volume is not mounted (e.g. worker pods, test environments).
