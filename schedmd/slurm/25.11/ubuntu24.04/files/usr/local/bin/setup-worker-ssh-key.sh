@@ -7,9 +7,7 @@
 # agent forwarding.
 #
 # No-op if the private keys volume is not mounted (e.g. worker pods, test environments).
-set -exuo pipefail
-
-echo "HOSTNAME: $(hostname)"
+set -euo pipefail
 
 USERNAME="${PAM_USER}"
 KEY_SRC="/var/lib/worker-ssh-private-keys/worker-private-${USERNAME}"
