@@ -17,6 +17,7 @@ setenv("HPCX_MPI_DIR", pathJoin(base, "ompi"))
 setenv("MPI_HOME", pathJoin(base, "ompi"))
 setenv("OMPI_HOME", pathJoin(base, "ompi"))
 setenv("OPAL_PREFIX", pathJoin(base, "ompi"))
+setenv("OSHMEM_HOME", pathJoin(base, "ompi"))
 
 prepend_path("PATH", pathJoin(base, "ompi/bin"))
 prepend_path("PATH", pathJoin(base, "ucx/bin"))
