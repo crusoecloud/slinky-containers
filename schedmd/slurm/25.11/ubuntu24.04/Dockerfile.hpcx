@@ -255,8 +255,7 @@ ENV CUDA_HOME=/usr/local/cuda
 
 # Lmod module files for CUDA, HPC-X, and NCCL
 COPY files/usr/share/modulefiles/ /usr/share/modulefiles/
-# /opt/modulefiles is reserved for site-wide modules (e.g. future CSO PVC mount)
-ENV MODULEPATH=/usr/share/modulefiles:/opt/modulefiles
+ENV MODULEPATH=/usr/share/modulefiles
 # Source lmod bash init in non-interactive shells (sbatch/srun job scripts)
 ENV BASH_ENV=/usr/share/lmod/lmod/init/bash
 
