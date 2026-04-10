@@ -254,8 +254,7 @@ ENV PKG_CONFIG_PATH=/opt/hpcx/hcoll/lib/pkgconfig:/opt/hpcx/sharp/lib/pkgconfig:
 ENV CUDA_HOME=/usr/local/cuda
 
 # Lmod module files for CUDA, HPC-X, and NCCL
-COPY files/usr/share/modulefiles/ /usr/share/modulefiles/
-ENV MODULEPATH=/usr/share/modulefiles
+COPY files/etc/lmod/modules/ /etc/lmod/modules/
 
 FROM base-amd64 AS base-arm64
 # Clusterkit isn't included in HPC-X on ARM64 (as of v2.22)
