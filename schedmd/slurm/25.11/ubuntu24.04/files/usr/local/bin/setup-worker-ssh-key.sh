@@ -9,7 +9,12 @@
 # No-op if the private keys volume is not mounted (e.g. worker pods, test environments).
 set -euo pipefail
 
-USERNAME="${PAM_USER}"
+USERNAME="${PAM_USER:-}"
+SESSION_TYPE="${PAM_TYPE:-}"
+
+[ -z "${USERNAME}" ] && exit 0
+[ -z "${SESSION_TYPE}" ] && exit 0
+
 KEY_SRC="/var/lib/worker-ssh-private-keys/worker-private-${USERNAME}"
 KEY_DST="/var/lib/worker-ssh-private-keys-perms/${USERNAME}"
 
@@ -18,11 +23,11 @@ KEY_DST="/var/lib/worker-ssh-private-keys-perms/${USERNAME}"
 USER_UID=$(id -u "${USERNAME}" 2>/dev/null) || exit 0
 USER_GID=$(id -g "${USERNAME}" 2>/dev/null) || exit 0
 
-if [ "${PAM_TYPE}" = "open_session" ]; then
+if [ "${SESSION_TYPE}" = "open_session" ]; then
     cp "${KEY_SRC}" "${KEY_DST}"
     chmod 600 "${KEY_DST}"
     chown "${USER_UID}:${USER_GID}" "${KEY_DST}"
-elif [ "${PAM_TYPE}" = "close_session" ]; then
+elif [ "${SESSION_TYPE}" = "close_session" ]; then
     # -f so that we don't fail if key was never created, which would block session close
     rm -f "${KEY_DST}"
 fi
