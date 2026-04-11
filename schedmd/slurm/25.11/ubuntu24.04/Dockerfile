@@ -7,7 +7,9 @@
 ARG SLURM_VERSION=25.11-latest
 ARG SLURM_DIR=slurm
 ARG REGISTRY
-ARG PARENT_IMAGE=${REGISTRY}/hpcx-base:cuda12.8.1-ubuntu24.04
+ARG LINUX_FLAVOR=ubuntu24.04
+ARG SUFFIX=
+ARG PARENT_IMAGE=${REGISTRY}/hpcx-base:cuda12.8.1-${LINUX_FLAVOR}${SUFFIX:+-}${SUFFIX}
 
 ################################################################################
 FROM alpine:latest AS slurm-src
@@ -54,7 +56,7 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
   --mount=type=cache,target=/var/lib/apt,sharing=locked <<EOR
 # Install Dependencies
 set -xeuo pipefail
-apt-get update && apt-get install -y libjson-c-dev libhttp-parser-dev libjwt-dev libdbus-1-dev libbpf-dev
+apt-get update && apt-get install -y libjson-c-dev libhttp-parser-dev libjwt-dev libdbus-1-dev libbpf-dev python3
 # Build Slurm
 cd /tmp/${SLURM_DIR}
 ./configure \

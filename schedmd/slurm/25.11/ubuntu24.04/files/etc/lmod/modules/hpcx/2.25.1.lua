@@ -1,0 +1,47 @@
+help([[HPC-X v2.25.1 - Mellanox HPC software toolkit]])
+
+whatis("Name:        HPC-X")
+whatis("Version:     2.25.1")
+whatis("Description: Mellanox HPC-X toolkit including OpenMPI, UCX, UCC, HCOLL, and SHARP")
+whatis("URL:         https://developer.nvidia.com/networking/hpc-x")
+
+local base = "/opt/hpcx"
+
+setenv("HPCX_DIR", base)
+setenv("HPCX_UCX_DIR", pathJoin(base, "ucx"))
+setenv("HPCX_UCC_DIR", pathJoin(base, "ucc"))
+setenv("HPCX_SHARP_DIR", pathJoin(base, "sharp"))
+setenv("HPCX_NCCL_RDMA_SHARP_PLUGIN_DIR", pathJoin(base, "nccl_rdma_sharp_plugin"))
+setenv("HPCX_HCOLL_DIR", pathJoin(base, "hcoll"))
+setenv("HPCX_MPI_DIR", pathJoin(base, "ompi"))
+setenv("MPI_HOME", pathJoin(base, "ompi"))
+setenv("OMPI_HOME", pathJoin(base, "ompi"))
+setenv("OPAL_PREFIX", pathJoin(base, "ompi"))
+setenv("OSHMEM_HOME", pathJoin(base, "ompi"))
+
+prepend_path("PATH", pathJoin(base, "ompi/bin"))
+prepend_path("PATH", pathJoin(base, "ucx/bin"))
+prepend_path("PATH", pathJoin(base, "ucc/bin"))
+prepend_path("PATH", pathJoin(base, "hcoll/bin"))
+prepend_path("PATH", pathJoin(base, "sharp/bin"))
+prepend_path("PATH", pathJoin(base, "clusterkit/bin"))
+
+prepend_path("LD_LIBRARY_PATH", pathJoin(base, "ompi/lib"))
+prepend_path("LD_LIBRARY_PATH", pathJoin(base, "hcoll/lib"))
+prepend_path("LD_LIBRARY_PATH", pathJoin(base, "sharp/lib"))
+prepend_path("LD_LIBRARY_PATH", pathJoin(base, "ucx/lib"))
+prepend_path("LD_LIBRARY_PATH", pathJoin(base, "ucx/lib/ucx"))
+prepend_path("LD_LIBRARY_PATH", pathJoin(base, "ucc/lib"))
+prepend_path("LD_LIBRARY_PATH", pathJoin(base, "ucc/lib/ucc"))
+prepend_path("LD_LIBRARY_PATH", pathJoin(base, "nccl_rdma_sharp_plugin/lib"))
+
+prepend_path("CPATH", pathJoin(base, "hcoll/include"))
+prepend_path("CPATH", pathJoin(base, "sharp/include"))
+prepend_path("CPATH", pathJoin(base, "ucx/include"))
+prepend_path("CPATH", pathJoin(base, "ucc/include"))
+prepend_path("CPATH", pathJoin(base, "ompi/include"))
+
+prepend_path("PKG_CONFIG_PATH", pathJoin(base, "ompi/lib/pkgconfig"))
+prepend_path("PKG_CONFIG_PATH", pathJoin(base, "ucx/lib/pkgconfig"))
+prepend_path("PKG_CONFIG_PATH", pathJoin(base, "sharp/lib/pkgconfig"))
+prepend_path("PKG_CONFIG_PATH", pathJoin(base, "hcoll/lib/pkgconfig"))

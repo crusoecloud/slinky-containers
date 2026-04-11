@@ -76,6 +76,10 @@ build_images:
         echo "No cache found, building from scratch"
       fi
 
+    # Set suffix for commit-specific tag — must be set before hpcx_base build
+    # so that PARENT_IMAGE in Dockerfile resolves to the same suffixed tag
+    - export SUFFIX="${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}"
+
     # Build hpcx_base image first (required for Ubuntu 24.04 builds)
     - |
       if [ "${LINUX_FLAVOR}" = "ubuntu24.04" ]; then
@@ -83,15 +87,12 @@ build_images:
         docker buildx bake \
           ${BAKE_FILES} \
           --set "*.cache-to=type=inline" \
-          --set "*.cache-from=type=registry,ref=${CI_REGISTRY_IMAGE}/hpcx-base:cuda12.8.1-${LINUX_FLAVOR}" \
+          --set "*.cache-from=type=registry,ref=${CI_REGISTRY_IMAGE}/hpcx-base:cuda12.8.1-${LINUX_FLAVOR}-${CI_COMMIT_REF_SLUG}-latest" \
           --set "*.platform=linux/amd64" \
           --set "*.output=type=registry" \
           hpcx_base
-        echo "hpcx_base image built successfully as ${CI_REGISTRY_IMAGE}/hpcx-base:cuda12.8.1-${LINUX_FLAVOR}"
+        echo "hpcx_base image built successfully as ${CI_REGISTRY_IMAGE}/hpcx-base:cuda12.8.1-${LINUX_FLAVOR}-${SUFFIX}"
       fi
-
-    # Set suffix for commit specific tag
-    - export SUFFIX="${CI_COMMIT_REF_SLUG}-${CI_COMMIT_SHORT_SHA}"
     
     # Build all images using docker bake
     - |
@@ -127,7 +128,7 @@ build_images:
         echo "Tagging hpcx-base with branch tag"
         docker buildx imagetools create \
           -t ${CI_REGISTRY_IMAGE}/hpcx-base:cuda12.8.1-${LINUX_FLAVOR}-${CI_COMMIT_REF_SLUG}-latest \
-          ${CI_REGISTRY_IMAGE}/hpcx-base:cuda12.8.1-${LINUX_FLAVOR}
+          ${CI_REGISTRY_IMAGE}/hpcx-base:cuda12.8.1-${LINUX_FLAVOR}-${SUFFIX}
       fi
 
     - echo "Build complete! Images pushed to ${CI_REGISTRY_IMAGE}"
